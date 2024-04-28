@@ -40,7 +40,9 @@ RUN python -m pip install pyquaternion
 # Install Faster
 RUN mkdir -p /home/kota/ws/src
 WORKDIR /home/kota/ws/src
-RUN git clone https://github.com/kotakondo/faster.git
+ARG DUMMY=unknown
+RUN DUMMY=${DUMMY} git clone https://github.com/kotakondo/faster.git
+# COPY faster /home/kota/ws/src/faster 
 RUN wstool init
 RUN wstool merge ./faster/faster/install/faster.rosinstall
 RUN wstool merge ./faster/faster/install/faster_ground_robot.rosinstall
@@ -71,12 +73,10 @@ RUN echo "export GUROBI_HOME=\"/opt/gurobi952/linux64\"" >> ~/.bashrc
 RUN echo "export PATH=\"\${PATH}:\${GUROBI_HOME}/bin\"" >> ~/.bashrc
 RUN echo "export LD_LIBRARY_PATH=\"\${GUROBI_HOME}/lib\"" >> ~/.bashrc
 
-# FROM gurobi/optimizer:latest
-
 # Set up bashrc
 RUN echo "source /home/kota/ws/devel/setup.bash" >> ~/.bashrc
 
 # Set up Entry Point
-COPY ./faster_ground_robot.yml /
+COPY ./faster/docker/faster_ground_robot.yml /
 RUN chmod +x /faster_ground_robot.yml
 ENTRYPOINT ["tmuxp", "load", "/faster_ground_robot.yml"]

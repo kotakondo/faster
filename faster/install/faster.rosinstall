@@ -17,6 +17,6 @@
 - git:
     local-name: acl-mapping
     uri: https://gitlab.com/mit-acl/lab/acl-mapping
-    version: 821655dc687cfeec6d4818b73d7633fc5b665987
+    version: 749d5c76757e7e7faa85754ace3cfe6e294e7e61
 
     

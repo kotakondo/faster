@@ -31,21 +31,21 @@ class GoalToCmdVel:
     def __init__(self):
         self.state=State()
 
-        self.state.pos.x = rospy.get_param('~x', 0.0);
-        self.state.pos.y = rospy.get_param('~y', 0.0);
-        self.state.pos.z = rospy.get_param('~z', 0.0);
+        self.state.pos.x = rospy.get_param('~x', 0.0)
+        self.state.pos.y = rospy.get_param('~y', 0.0)
+        self.state.pos.z = rospy.get_param('~z', 0.0)
 
         self.state.quat.x = 0
         self.state.quat.y = 0
         self.state.quat.z = 0
         self.state.quat.w = 1
 
-        self.current_yaw=0.0;
+        self.current_yaw=0.0
 
 
 
         #Publishers
-        self.pubCmdVel = rospy.Publisher('jackal_velocity_controller/cmd_vel', Twist, queue_size=1, latch=True)
+        self.pubCmdVel = rospy.Publisher('cmd_vel_auto', Twist, queue_size=1, latch=True)
         self.pubState = rospy.Publisher('state', State, queue_size=1, latch=False)
 
         #Timers
@@ -57,21 +57,21 @@ class GoalToCmdVel:
         self.kyaw = 2.0
         self.kalpha = 1.5
 
-        self.state_initialized=False;
-        self.goal_initialized=False;
+        self.state_initialized=False
+        self.goal_initialized=False
 
         self.goal=Goal()
-        self.goal.p.x=0.0;
-        self.goal.p.y=0.0;
-        self.goal.p.z=0.0;
-        self.goal.v.x=0.0;
-        self.goal.v.y=0.0;
-        self.goal.v.z=0.0;
-        self.goal.a.x=0.0;
-        self.goal.a.y=0.0;
-        self.goal.a.z=0.0;
+        self.goal.p.x=0.0
+        self.goal.p.y=0.0
+        self.goal.p.z=0.0
+        self.goal.v.x=0.0
+        self.goal.v.y=0.0
+        self.goal.v.z=0.0
+        self.goal.a.x=0.0
+        self.goal.a.y=0.0
+        self.goal.a.z=0.0
 
-        self.state_initialized=False;
+        self.state_initialized=False
 
     # def stateCB(self, msg):
     #     self.state.pos.x = msg.pos.x
@@ -82,7 +82,7 @@ class GoalToCmdVel:
     #     self.state.quat.z = msg.quat.z
     #     self.state.quat.w = msg.quat.w
 
-    #     self.state_initialized=True;
+    #     self.state_initialized=True
 
     def odomCB(self, msg):
         self.state.pos.x = msg.pose.pose.position.x
@@ -91,51 +91,51 @@ class GoalToCmdVel:
 
         (yaw, _, _)=euler_from_quaternion((msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z,msg.pose.pose.orientation.w), "szyx")
         
-        self.current_yaw = yaw;
+        self.current_yaw = yaw
 
         self.state.vel = msg.twist.twist.linear
 
-        self.state.quat=msg.pose.pose.orientation;
+        self.state.quat=msg.pose.pose.orientation
 
         self.state.w = msg.twist.twist.angular
 
         self.pubState.publish(self.state)
 
-        self.state_initialized=True;
+        self.state_initialized=True
 
     def goalCB(self, goal):
 
-        self.goal=goal;
+        self.goal=goal
 
-        # self.goal.p.x=goal.p.x;
-        # self.goal.p.y=goal.p.y;
-        # self.goal.p.z=goal.p.z;
-        # self.goal.v.x=goal.v.x;
-        # self.goal.v.y=goal.v.y;
-        # self.goal.v.z=goal.v.z;
-        # self.goal.a.x=goal.a.x;
-        # self.goal.a.y=goal.a.y;
+        # self.goal.p.x=goal.p.x
+        # self.goal.p.y=goal.p.y
+        # self.goal.p.z=goal.p.z
+        # self.goal.v.x=goal.v.x
+        # self.goal.v.y=goal.v.y
+        # self.goal.v.z=goal.v.z
+        # self.goal.a.x=goal.a.x
+        # self.goal.a.y=goal.a.y
 
-        self.goal_initialized=True;
+        self.goal_initialized=True
 
 
     def cmdVelCB(self, goal):
         if (self.state_initialized==False or self.goal_initialized==False):
-          return;
+          return
 
-        twist=Twist();
-
-
-        x = self.goal.p.x;
-        y = self.goal.p.y;
-        xd = self.goal.v.x;
-        yd = self.goal.v.y;
-        xd2 = self.goal.a.x;
-        yd2 = self.goal.a.y;
+        twist=Twist()
 
 
-        v_desired = math.sqrt(xd**2 + yd**2);
-        alpha = self.current_yaw - math.atan2(y - self.state.pos.y, x - self.state.pos.x);
+        x = self.goal.p.x
+        y = self.goal.p.y
+        xd = self.goal.v.x
+        yd = self.goal.v.y
+        xd2 = self.goal.a.x
+        yd2 = self.goal.a.y
+
+
+        v_desired = math.sqrt(xd**2 + yd**2)
+        alpha = self.current_yaw - math.atan2(y - self.state.pos.y, x - self.state.pos.x)
         alpha=self.wrapPi(alpha)
         forward=1
         if(alpha <= 3.14 / 2.0 and alpha > -3.14 / 2.0):
@@ -143,56 +143,56 @@ class GoalToCmdVel:
         else:
           forward=-1
 
-        dist_error = forward * math.sqrt( (x - self.state.pos.x)**2 + (y - self.state.pos.y)**2  );
+        dist_error = forward * math.sqrt( (x - self.state.pos.x)**2 + (y - self.state.pos.y)**2  )
 
         if (abs(dist_error)<0.03):
-          alpha=0;
+          alpha=0
 
-        vel_norm=LA.norm(np.array([self.goal.v.x, self.goal.v.y, self.goal.v.z]));
+        vel_norm=LA.norm(np.array([self.goal.v.x, self.goal.v.y, self.goal.v.z]))
 
         if (abs(dist_error)<0.10 and vel_norm<0.05): #The robot is just yawing to orient with respect to the goal
 
-            yaw_error = self.current_yaw - self.goal.yaw;
+            yaw_error = self.current_yaw - self.goal.yaw
             yaw_error=self.wrapPi(yaw_error)            
 
-            twist.linear.x = 0.0;
-            twist.angular.z = - self.kyaw * yaw_error;
+            twist.linear.x = 0.0
+            twist.angular.z = - self.kyaw * yaw_error
         else:
 
-            numerator = xd * yd2 - yd * xd2;
-            denominator = xd * xd + yd * yd;
-            w_desired=0.0;
+            numerator = xd * yd2 - yd * xd2
+            denominator = xd * xd + yd * yd
+            w_desired=0.0
             if(denominator > 0.01):
-              w_desired=numerator / denominator;
+              w_desired=numerator / denominator
 
-            desired_yaw=math.atan2(yd,xd); #(abs(dist_error)>0.07)*
-            #desired_yaw=math.atan2(yd,xd);
+            desired_yaw=math.atan2(yd,xd) #(abs(dist_error)>0.07)*
+            #desired_yaw=math.atan2(yd,xd)
 
 
-            yaw_error = self.current_yaw - desired_yaw;
+            yaw_error = self.current_yaw - desired_yaw
             yaw_error=self.wrapPi(yaw_error)
 
 
             # print " "
-            # self.printAngle(self.goal.yaw,"self.goal.yaw");
-            # self.printAngle(math.atan2(yd,xd),"math.atan2(yd,xd)");
-            # self.printAngle(desired_yaw,"desired_yaw");
-            # self.printAngle(self.current_yaw,"self.current_yaw");
-            # self.printAngle(yaw_error,"yaw_error before wrap");
-            # self.printAngle(yaw_error,"yaw_error");
+            # self.printAngle(self.goal.yaw,"self.goal.yaw")
+            # self.printAngle(math.atan2(yd,xd),"math.atan2(yd,xd)")
+            # self.printAngle(desired_yaw,"desired_yaw")
+            # self.printAngle(self.current_yaw,"self.current_yaw")
+            # self.printAngle(yaw_error,"yaw_error before wrap")
+            # self.printAngle(yaw_error,"yaw_error")
 
 
-            # self.printAngle(yaw_error,"yaw_error after wrap");
+            # self.printAngle(yaw_error,"yaw_error after wrap")
 
 
 
-            twist.linear.x = self.kv * v_desired + self.kdist * dist_error;
-            twist.angular.z = self.kw * w_desired - self.kyaw * yaw_error - self.kalpha * alpha# + self.goal.dyaw;
+            twist.linear.x = self.kv * v_desired + self.kdist * dist_error
+            twist.angular.z = self.kw * w_desired - self.kyaw * yaw_error - self.kalpha * alpha# + self.goal.dyaw
 
-        # self.printAngle(self.goal.dyaw,"self.goal.dyaw");
+        # self.printAngle(self.goal.dyaw,"self.goal.dyaw")
         # print "twist.angular.z", twist.angular.z
 
-        # twist.linear.x=self.Kp*(goal.p.x - self.state.pos.x);
+        # twist.linear.x=self.Kp*(goal.p.x - self.state.pos.x)
 
         self.pubCmdVel.publish(twist)
 
@@ -216,7 +216,7 @@ def startNode():
     #self.sub_state = rospy.Subscriber("state", State, self.stateCB, queue_size=1)
 
     rospy.Subscriber("goal", Goal, c.goalCB, queue_size=1)
-    rospy.Subscriber("ground_truth/state", Odometry, c.odomCB, queue_size=1) #jackal_velocity_controller/odom   # odometry/local_filtered
+    rospy.Subscriber("odometry", Odometry, c.odomCB, queue_size=1) #jackal_velocity_controller/odom   # odometry/local_filtered
 
 
     rospy.spin()
@@ -230,7 +230,7 @@ if __name__ == '__main__':
             rospy.logfatal("Need to specify namespace as vehicle name.")
             rospy.logfatal("This is tyipcally accomplished in a launch file.")
         else:
-            print "Starting node for: " + ns
+            print("Starting node for: " + ns)
             startNode()
     except rospy.ROSInterruptException:
         pass

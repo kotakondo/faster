@@ -690,6 +690,8 @@ void Faster::getDesiredYaw(state& next_goal)
   if (fabs(diff) < 0.04 && drone_status_ == DroneStatus::YAWING)
   {
     changeDroneStatus(DroneStatus::TRAVELING);
+    desired_yaw = atan2(M_.pos[1] - next_goal.pos[1], M_.pos[0] - next_goal.pos[0]);
+    diff = desired_yaw - state_.yaw;
   }
   // std::cout << "diff2= " << diff << std::endl;
   yaw(diff, next_goal);

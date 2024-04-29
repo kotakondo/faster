@@ -81,6 +81,6 @@ RUN echo "ROS_URI_MASTER=http://192.168.0.19:11311" >> ~/.bashrc
 RUN echo "ROS_IP=192.168.0.156" >> ~/.bashrc
 
 # Set up Entry Point
-COPY ./faster/docker/faster_ground_robot.yml /
+COPY ./faster_ground_robot.yml /
 RUN chmod +x /faster_ground_robot.yml
 ENTRYPOINT ["tmuxp", "load", "/faster_ground_robot.yml"]

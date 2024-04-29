@@ -76,6 +76,10 @@ RUN echo "export LD_LIBRARY_PATH=\"\${GUROBI_HOME}/lib\"" >> ~/.bashrc
 # Set up bashrc
 RUN echo "source /home/kota/ws/devel/setup.bash" >> ~/.bashrc
 
+# ROS Environment
+RUN echo "ROS_URI_MASTER=http://192.168.0.19:11311" >> ~/.bashrc
+RUN echo "ROS_IP=192.168.0.156" >> ~/.bashrc
+
 # Set up Entry Point
 COPY ./faster/docker/faster_ground_robot.yml /
 RUN chmod +x /faster_ground_robot.yml

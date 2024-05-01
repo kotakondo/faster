@@ -194,7 +194,7 @@ class GoalToCmdVel:
 
         # twist.linear.x=self.Kp*(goal.p.x - self.state.pos.x)
 
-        self.pubCmdVel.publish(twist)
+        # self.pubCmdVel.publish(twist)
 
 
     def wrapPi(self, x):

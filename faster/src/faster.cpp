@@ -677,8 +677,9 @@ void Faster::getDesiredYaw(state& next_goal)
       break;
     case DroneStatus::TRAVELING:
     case DroneStatus::GOAL_SEEN:
-      desired_yaw = atan2(M_.pos[1] - next_goal.pos[1], M_.pos[0] - next_goal.pos[0]);
-      diff = desired_yaw - state_.yaw;
+      desired_yaw = atan2(next_goal.pos[1] - state_.pos.y(), next_goal.pos[0] - state_.pos.x());
+      next_goal.yaw = desired_yaw;
+      return;
       break;
     case DroneStatus::GOAL_REACHED:
       next_goal.dyaw = 0.0;

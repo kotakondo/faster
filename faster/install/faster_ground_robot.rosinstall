@@ -1,4 +1,4 @@
 - git:
     local-name: multi_jackal
     uri: https://github.com/mit-acl/multi_jackal.git
-    version: 2a919454d55bebe3b5395396e593ab09b302719f
+    version: 87158b5af0e5c58fca1dda672f3aa1c38a21d9d1

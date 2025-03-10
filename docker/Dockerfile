@@ -93,4 +93,3 @@ RUN echo "alias tks='tmux kill-server'" >> ~/.bashrc
 COPY ./faster_sim.yml /
 RUN chmod +x /faster_sim.yml
 ENTRYPOINT ["tmuxp", "load", "/faster_sim.yml"]
-

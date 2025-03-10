@@ -12,6 +12,3 @@
 
 	<!-- Start GUI -->
 	<node pkg="rqt_gui" type="rqt_gui" name="rqt_gui" args="--perspective-file /home/kota/ws/src/faster/faster/rqt_cfgs/demo_interface.perspective"/>
-
-
-</launch>

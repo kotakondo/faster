@@ -8,7 +8,7 @@ ENV ROS_DISTRO=melodic
 RUN sudo rm -rf /var/lib/apt/lists/*
 RUN apt-get update && \
       apt-get upgrade -y && \
-      apt-get install -q -y --no-install-recommends git apt-utils wget && \
+      apt-get install -q -y --no-install-recommends git apt-utils wget tmux vim tmuxp make && \
       apt-get autoremove -y && \
       apt-get clean
 
@@ -32,8 +32,7 @@ RUN sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
      ros-${ROS_DISTRO}-rqt-gui \
      ros-${ROS_DISTRO}-rqt-gui-py \
      ros-${ROS_DISTRO}-rviz \
-     python3-catkin-tools \
-     tmux tmuxp vim
+     python3-catkin-tools 
 
 RUN python -m pip install pyquaternion
 
@@ -42,7 +41,6 @@ RUN mkdir -p /home/kota/ws/src
 WORKDIR /home/kota/ws/src
 ARG DUMMY=unknown
 RUN DUMMY=${DUMMY} git clone https://github.com/kotakondo/faster.git
-# COPY faster /home/kota/ws/src/faster 
 RUN wstool init
 RUN wstool merge ./faster/faster/install/faster.rosinstall
 RUN wstool merge ./faster/faster/install/faster_ground_robot.rosinstall
@@ -76,11 +74,22 @@ RUN echo "export LD_LIBRARY_PATH=\"\${GUROBI_HOME}/lib\"" >> ~/.bashrc
 # Set up bashrc
 RUN echo "source /home/kota/ws/devel/setup.bash" >> ~/.bashrc
 
-# ROS Environment
-RUN echo "ROS_URI_MASTER=http://192.168.0.19:11311" >> ~/.bashrc
-RUN echo "ROS_IP=192.168.0.156" >> ~/.bashrc
+# Set up ROS
+# RUN echo "export ROS_MASTER_URI=http://192.168.0.1:11311" >> ~/.bashrc
+# RUN echo "export ROS_MASTER_URI=http://172.17.0.2:11311" >> ~/.bashrc
+# RUN echo "export ROS_MASTER_URI=http://localhost:11311" >> ~/.bashrc
+RUN echo "export ROS_MASTER_URI=http://127.0.0.1:11311" >> ~/.bashrc
+RUN echo "export ROS_IP=localhost" >> ~/.bashrc
+RUN echo "export ROS_HOSTNAME=localhost" >> ~/.bashrc
 
-# Set up Entry Point
-COPY ./faster_ground_robot.yml /
-RUN chmod +x /faster_ground_robot.yml
-ENTRYPOINT ["tmuxp", "load", "/faster_ground_robot.yml"]
+# shortcut 
+RUN echo "alias tks='tmux kill-server'" >> ~/.bashrc
+
+# # Set up Entry Point
+# COPY ./faster_ground_robot.yml /
+# RUN chmod +x /faster_ground_robot.yml
+# ENTRYPOINT ["tmuxp", "load", "/faster_ground_robot.yml"]
+
+COPY ./faster_sim.yml /
+RUN chmod +x /faster_sim.yml
+ENTRYPOINT ["tmuxp", "load", "/faster_sim.yml"]

@@ -1,15 +1,16 @@
 build:
-	docker build -f /home/jtorde/Research/faster_ws/src/faster/docker/Dockerfile -t faster .
+	docker build -t faster .
 
-build-no-cache:
-	# docker build --no-cache -f /home/jtorde/Research/faster_ws/src/faster/docker/Dockerfile -t faster .
-	docker build --build-arg DUMMY=`date +%s` -f /home/jtorde/Research/faster_ws/src/faster/docker/Dockerfile -t faster .
-
+build-clone:
+	docker build --build-arg DUMMY=`date +%s` -t faster .
 run:
-	docker run --volume=/home/jtorde/gurobi.lic:/opt/gurobi/gurobi.lic:ro -it \
-				--privileged \
-				--gpus all --env="NVIDIA_DRIVER_CAPABILITIES=all" \
-				-e DISPLAY=${DISPLAY} \
-				--net=host --env="DISPLAY" \
-				--env="QT_X11_NO_MITSHM=1" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-				--rm faster 
+	docker run  -it \
+			--gpus all \
+			--env="NVIDIA_DRIVER_CAPABILITIES=all" \
+			--privileged \
+			-e DISPLAY=${DISPLAY} \
+			--network=host \
+			--env="DISPLAY" \
+			--env="QT_X11_NO_MITSHM=1" \
+			--volume=${PWD}/gurobi.lic:/opt/gurobi/gurobi.lic:ro \
+			--rm faster

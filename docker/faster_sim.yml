@@ -11,6 +11,3 @@ windows:
       - roslaunch --wait faster faster.launch
       - rviz rviz -d /home/kota/ws/src/faster/faster/rviz_cfgs/cvx_SQ01s.rviz
       - rosrun rqt_gui rqt_gui --perspective-file /home/kota/ws/src/faster/faster/rqt_cfgs/demo_interface.perspective
-
-
-rostopic pub /SQ01/term_goal geometry_msgs/PoseStamped "{header: frame_id: 'world' pose: position: {x: 20.0, y: 20.0, z: 2.0} orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}"

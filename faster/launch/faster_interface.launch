@@ -6,9 +6,3 @@
 	<node ns="$(arg quad)" name="faster_commands" pkg="faster" type="faster_commands.py" output="screen">
 		<param name="is_ground_robot" type="bool" value="$(arg is_ground_robot)" />
 	</node>
-
-	<!-- Start Rviz -->
-	<node pkg="rviz" type="rviz" name="rviz" args="-d /home/kota/ws/src/faster/faster/rviz_cfgs/cvx_SQ01.rviz"/>
-
-	<!-- Start GUI -->
-	<node pkg="rqt_gui" type="rqt_gui" name="rqt_gui" args="--perspective-file /home/kota/ws/src/faster/faster/rqt_cfgs/demo_interface.perspective"/>

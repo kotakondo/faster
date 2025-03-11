@@ -84,12 +84,21 @@ RUN echo "export ROS_HOSTNAME=localhost" >> ~/.bashrc
 
 # shortcut 
 RUN echo "alias tks='tmux kill-server'" >> ~/.bashrc
+RUN echo "alias sb='source ~/.bashrc'" >> ~/.bashrc
+RUN echo "alias eb='code ~/.bashrc'" >> ~/.bashrc
+RUN echo "alias gs='git status'" >> ~/.bashrc
+RUN echo "alias gp='git push'" >> ~/.bashrc
+RUN echo "alias roscd='cd /home/kota/ws'" >> ~/.bashrc
+RUN echo "alias cb='roscd && catkin build && sb'" >> ~/.bashrc
+RUN echo "alias ss='roscd && source devel/setup.bash'" >> ~/.bashrc
+RUN echo "alias cbf='clear && roscd && catkin build && ss'" >> ~/.bashrc
+RUN echo "alias run_faster='tmuxp load /home/kota/ws/src/faster/docker/faster_sim.yml'" >> ~/.bashrc
 
 # # Set up Entry Point
 # COPY ./faster_ground_robot.yml /
 # RUN chmod +x /faster_ground_robot.yml
 # ENTRYPOINT ["tmuxp", "load", "/faster_ground_robot.yml"]
 
-COPY ./faster_sim.yml /
-RUN chmod +x /faster_sim.yml
-ENTRYPOINT ["tmuxp", "load", "/faster_sim.yml"]
+# COPY ./faster_sim.yml /
+# RUN chmod +x /faster_sim.yml
+# ENTRYPOINT ["tmuxp", "load", "/faster_sim.yml"]

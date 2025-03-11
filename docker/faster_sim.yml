@@ -5,7 +5,7 @@ windows:
     panes:
       - roscore
       - roslaunch --wait acl_sim start_world.launch
-      - roslaunch --wait acl_sim perfect_tracker_and_sim.launch x:=10.0 y:=10.0 z:=1.0 yaw:=90.0
+      - roslaunch --wait acl_sim perfect_tracker_and_sim.launch x:=10.0 y:=10.0 z:=1.0 yaw:=0.0
       - roslaunch --wait global_mapper_ros global_mapper_node.launch
       - roslaunch --wait faster faster_interface.launch
       - roslaunch --wait faster faster.launch

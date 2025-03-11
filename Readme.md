@@ -39,6 +39,11 @@ The conference version is [here](https://arxiv.org/abs/1903.03558):
 2. Run the docker container: `make run` in docker folder
 3. Open a docker extension in VSCode (click the whale logo), right click on `faster` container under Infividual Containers, choose Attach Visual Studio Code
 
+## Docker Usage
+
+1. Run the docker container: `make run` in docker folder
+2. Inside docker, `tmuxp load /home/kota/ws/src/faster/docker/faster_sim.yml` to start the simulation
+
 ## General Setup
 FASTER has been tested with 
 * Ubuntu 16.04/ROS Kinetic  

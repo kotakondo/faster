@@ -75,6 +75,12 @@ Faster::Faster(parameters par) : par_(par)
 
   changeDroneStatus(DroneStatus::GOAL_REACHED);
   resetInitialization();
+
+  // clear all the computation times
+  replan_times_.clear();
+  gurobi_whole_run_time_ms_.clear();
+  gurobi_safe_run_time_ms_.clear();
+  simulation_number_ = par_.simulation_number;
 }
 
 void Faster::createMoreVertexes(vec_Vecf<3>& path, double d)
@@ -94,6 +100,27 @@ void Faster::createMoreVertexes(vec_Vecf<3>& path, double d)
       }
     }
   }
+}
+
+// destructor
+Faster::~Faster()
+{
+  
+  std::cout << "writing computation times to csv file" << std::endl;
+  // Open (or create) a CSV file for writing (append mode)
+  std::ofstream csvFile;
+  csvFile.open("/home/kota/data/computation_times_num_" + std::to_string(simulation_number_) + ".csv", std::ios::app);
+  if (!csvFile.is_open()) {
+      std::cerr << "Error: Could not open CSV file for writing." << std::endl;
+  }
+  csvFile << "ComputationTime (micro seconds) for sim number " << simulation_number_ << std::endl;
+  csvFile << "total_replan, gurobi_whole, gurobi_safe" << std::endl;
+  for (int i = 0; i < replan_times_.size(); i++) {
+      csvFile << replan_times_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << std::endl;
+  }
+  csvFile.close();
+  std::cout << "done writing computation times to csv file" << std::endl;
+
 }
 
 void Faster::updateMap(pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_map, pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_unk)
@@ -269,10 +296,10 @@ bool Faster::initializedAllExceptPlanner()
 {
   if (!state_initialized_ || !kdtree_map_initialized_ || !kdtree_unk_initialized_ || !terminal_goal_initialized_)
   {
-    std::cout << "state_initialized_= " << state_initialized_ << std::endl;
-    std::cout << "kdtree_map_initialized_= " << kdtree_map_initialized_ << std::endl;
-    std::cout << "kdtree_unk_initialized_= " << kdtree_unk_initialized_ << std::endl;
-    std::cout << "terminal_goal_initialized_= " << terminal_goal_initialized_ << std::endl;
+    // std::cout << "state_initialized_= " << state_initialized_ << std::endl;
+    // std::cout << "kdtree_map_initialized_= " << kdtree_map_initialized_ << std::endl;
+    // std::cout << "kdtree_unk_initialized_= " << kdtree_unk_initialized_ << std::endl;
+    // std::cout << "terminal_goal_initialized_= " << terminal_goal_initialized_ << std::endl;
     return false;
   }
   return true;
@@ -283,11 +310,11 @@ bool Faster::initialized()
   if (!state_initialized_ || !kdtree_map_initialized_ || !kdtree_unk_initialized_ || !terminal_goal_initialized_ ||
       !planner_initialized_)
   {
-    std::cout << "state_initialized_= " << state_initialized_ << std::endl;
-    std::cout << "kdtree_map_initialized_= " << kdtree_map_initialized_ << std::endl;
-    std::cout << "kdtree_unk_initialized_= " << kdtree_unk_initialized_ << std::endl;
-    std::cout << "terminal_goal_initialized_= " << terminal_goal_initialized_ << std::endl;
-    std::cout << "planner_initialized_= " << planner_initialized_ << std::endl;
+    // std::cout << "state_initialized_= " << state_initialized_ << std::endl;
+    // std::cout << "kdtree_map_initialized_= " << kdtree_map_initialized_ << std::endl;
+    // std::cout << "kdtree_unk_initialized_= " << kdtree_unk_initialized_ << std::endl;
+    // std::cout << "terminal_goal_initialized_= " << terminal_goal_initialized_ << std::endl;
+    // std::cout << "planner_initialized_= " << planner_initialized_ << std::endl;
     return false;
   }
   return true;
@@ -355,6 +382,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   ///////////////////////// Solve JPS //////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////
 
+  MyTimer timer_replan(true);
+
   bool solvedjps = false;
   MyTimer timer_jps(true);
 
@@ -386,6 +415,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   //////////////////////////////////////////////////////////////////////////
   ///////////////// Solve with GUROBI Whole trajectory /////////////////////
   //////////////////////////////////////////////////////////////////////////
+  double gurobi_whole_run_time_ms = 0.0;
+  double gurobi_safe_run_time_ms = 0.0;
 
   if (par_.use_faster == true)
   {
@@ -415,7 +446,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     */
     // Solve with Gurobi
     MyTimer whole_gurobi_t(true);
-    bool solved_whole = sg_whole_.genNewTraj();
+    bool solved_whole = sg_whole_.genNewTraj(gurobi_whole_run_time_ms);
 
     if (solved_whole == false)
     {
@@ -524,13 +555,18 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     sg_safe_.setForceFinalConstraint(shouldForceFinalConstraint_for_Safe);
     MyTimer safe_gurobi_t(true);
     std::cout << "Calling Gurobi" << std::endl;
-    bool solved_safe = sg_safe_.genNewTraj();
+    bool solved_safe = sg_safe_.genNewTraj(gurobi_safe_run_time_ms);
 
     if (solved_safe == false)
     {
       std::cout << red << "No solution found for the safe path" << reset << std::endl;
       return;
     }
+
+    // record the computation time
+    replan_times_.push_back(timer_replan.ElapsedMs());
+    gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
+    gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
 
     // Get the solution
     sg_safe_.fillX();
@@ -593,6 +629,15 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
 
   return;
 }
+
+void Faster::getComputationTimeVectors(std::vector<double>& replan_times, std::vector<double>& gurobi_whole_run_time_ms,
+                                       std::vector<double>& gurobi_safe_run_time_ms)
+{
+  replan_times = replan_times_;
+  gurobi_whole_run_time_ms = gurobi_whole_run_time_ms_;
+  gurobi_safe_run_time_ms = gurobi_safe_run_time_ms_;
+}
+
 
 void Faster::resetInitialization()
 {
@@ -701,7 +746,7 @@ bool Faster::getNextGoal(state& next_goal)
 {
   if (initializedAllExceptPlanner() == false)
   {
-    std::cout << "Not publishing new goal!!" << std::endl;
+    // std::cout << "Not publishing new goal!!" << std::endl;
     return false;
   }
 

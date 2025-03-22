@@ -70,8 +70,8 @@ public:
   void setXf(state& data);
   void resetX();
   void setBounds(double max_values[3]);
-  bool genNewTraj();
-  bool callOptimizer();
+  bool genNewTraj(double& gurobi_run_time_ms);
+  bool callOptimizer(double& gurobi_run_time_ms);
   double getDTInitial();
 
   void setDC(double dc);

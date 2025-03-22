@@ -68,6 +68,8 @@ struct parameters
   double goal_height;
   bool force_goal_height;
 
+  int simulation_number;
+
   /*  double kw;
     double kyaw;
     double kdalpha;

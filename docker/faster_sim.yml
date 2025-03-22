@@ -2,12 +2,15 @@ session_name: faster
 windows:
   - window_name: faster
     layout: tiled
+    shell_command_before:
+      - source /home/kota/faster_ws/devel/setup.bash
     panes:
       - roscore
       - roslaunch --wait acl_sim start_world.launch
-      - roslaunch --wait acl_sim perfect_tracker_and_sim.launch x:=10.0 y:=10.0 z:=1.0 yaw:=0.0
+      - roslaunch --wait acl_sim perfect_tracker_and_sim.launch x:=0.0 y:=0.0 z:=3.0 yaw:=0.0
       - roslaunch --wait global_mapper_ros global_mapper_node.launch
       - roslaunch --wait faster faster_interface.launch
       - roslaunch --wait faster faster.launch
       - rviz rviz -d /home/kota/ws/src/faster/faster/rviz_cfgs/cvx_SQ01s.rviz
-      - rosrun rqt_gui rqt_gui --perspective-file /home/kota/ws/src/faster/faster/rqt_cfgs/demo_interface.perspective
+      # - rosrun rqt_gui rqt_gui --perspective-file /home/kota/ws/src/faster/faster/rqt_cfgs/demo_interface.perspective
+      - # rostopic pub /SQ01s/faster/term_goal geometry_msgs/PoseStamped '{header: {frame_id: "world"}, pose: {position: {x: 105.0, y: 0.0, z: 3.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}' -1

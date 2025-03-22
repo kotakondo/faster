@@ -32,7 +32,8 @@ RUN sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
      ros-${ROS_DISTRO}-rqt-gui \
      ros-${ROS_DISTRO}-rqt-gui-py \
      ros-${ROS_DISTRO}-rviz \
-     python3-catkin-tools 
+     python3-catkin-tools \
+     rqt*
 
 RUN python -m pip install pyquaternion
 

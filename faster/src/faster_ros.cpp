@@ -58,6 +58,8 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
 
   safeGetParam(nh_, "is_ground_robot", par_.is_ground_robot);
 
+  safeGetParam(nh_, "simulation_number", par_.simulation_number);
+
   // And now obtain the parameters from the mapper
   std::vector<double> world_dimensions;
   safeGetParam(nh_, "mapper/world_dimensions", world_dimensions);
@@ -151,7 +153,7 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
   sync_.reset(new Sync(MySyncPolicy(1), occup_grid_sub_, unknown_grid_sub_));
   sync_->registerCallback(boost::bind(&FasterRos::mapCB, this, _1, _2));
   sub_goal_ = nh_.subscribe("term_goal", 1, &FasterRos::terminalGoalCB, this);
-  sub_mode_ = nh_.subscribe("mode", 1, &FasterRos::modeCB, this);
+  // sub_mode_ = nh_.subscribe("mode", 1, &FasterRos::modeCB, this);
   sub_state_ = nh_.subscribe("state", 1, &FasterRos::stateCB, this);
   // sub_odom_ = nh_.subscribe("odom", 1, &FasterRos::odomCB, this);
 
@@ -179,12 +181,20 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
   // &FasterRos::replanCB, this);
 
   clearMarkerActualTraj();
+
+  // Start without modeCB
+  occup_grid_sub_.subscribe();
+  unknown_grid_sub_.subscribe();
+  sub_state_ = nh_.subscribe("state", 1, &FasterRos::stateCB, this);  // TODO duplicated from above
+  pubCBTimer_.start();
+  replanCBTimer_.start();
 }
 
 void FasterRos::replanCB(const ros::TimerEvent& e)
 {
   if (ros::ok())
   {
+    
     vec_Vecf<3> JPS_safe;
     vec_Vecf<3> JPS_whole;
     vec_E<Polyhedron<3>> poly_safe;

@@ -423,7 +423,7 @@ void SolverGurobi::setFactorInitialAndFinalAndIncrement(double factor_initial, d
   factor_increment_ = factor_increment;
 }
 
-bool SolverGurobi::genNewTraj()
+bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
 {
   bool solved = false;
 
@@ -455,7 +455,7 @@ bool SolverGurobi::genNewTraj()
     setObjective();
     resetX();
 
-    solved = callOptimizer();
+    solved = callOptimizer(gurobi_run_time_ms);
     /*    if (solved == true)
         {
           solved = isWmaxSatisfied();
@@ -546,7 +546,7 @@ bool SolverGurobi::isWmaxSatisfied()
   return true;
 }
 
-bool SolverGurobi::callOptimizer()
+bool SolverGurobi::callOptimizer(double& gurobi_run_time_ms)
 {
   // int threads = m.get(GRB_IntParam_Threads);
 
@@ -571,6 +571,7 @@ bool SolverGurobi::callOptimizer()
   //          << std::endl;
 
   runtime_ms_ = runtime_ms_ + m.get(GRB_DoubleAttr_Runtime) * 1000;
+  gurobi_run_time_ms = m.get(GRB_DoubleAttr_Runtime) * 1000;
 
   /*  times_log.open("/home/jtorde/Desktop/ws/src/acl-planning/faster/models/times_log.txt", std::ios_base::app);
     times_log << elapsed << "\n";

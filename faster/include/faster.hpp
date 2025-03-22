@@ -54,6 +54,7 @@ class Faster
 {
 public:
   Faster(parameters par);
+  ~Faster();
   void replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E<Polyhedron<3>>& poly_safe_out,
               vec_E<Polyhedron<3>>& poly_whole_out, std::vector<state>& X_safe_out, std::vector<state>& X_whole_out);
   void updateState(state data);
@@ -64,6 +65,12 @@ public:
   void getG(state& G);
   void setTerminalGoal(state& term_goal);
   void resetInitialization();
+
+  // computation time
+  std::vector<double> replan_times_;
+  std::vector<double> gurobi_whole_run_time_ms_;
+  std::vector<double> gurobi_safe_run_time_ms_;
+  int simulation_number_ = 100;
 
 private:
   state M_;
@@ -109,6 +116,8 @@ private:
   bool initializedAllExceptPlanner();
 
   void print_status();
+  void getComputationTimeVectors(std::vector<double>& replan_times, std::vector<double>& gurobi_whole_run_time_ms,
+                                       std::vector<double>& gurobi_safe_run_time_ms);
 
   parameters par_;
 
@@ -194,4 +203,5 @@ private:
   state state_;
   state G_;       // This goal is always inside of the map
   state G_term_;  // This goal is the clicked goal
+
 };

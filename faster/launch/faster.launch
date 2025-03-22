@@ -2,6 +2,7 @@
 
 	<arg name="quad" default="SQ01s"/>
 	<arg name="goal_topic" default="goal"/>
+	<arg name="simulation_number" default="1"/>
 
 	<node ns="$(arg quad)" name="faster" pkg="faster" type="faster_node" output="screen" clear_params="true"> 
     <rosparam file="$(find faster)/param/faster.yaml" command="load"/>
@@ -23,6 +24,9 @@
 
 		<!-- <remap from="~goal_jackal" to="jackal_velocity_controller/cmd_vel" /> -->
 		<!-- <remap from="~goal_jackal" to="autonomous_cmd_vel" /> -->		
+
+		<!-- Parameters -->
+		<param name="simulation_number" value="$(arg simulation_number)"/>
 
 	</node>
 

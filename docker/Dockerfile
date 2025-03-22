@@ -35,7 +35,12 @@ RUN sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
      python3-catkin-tools \
      rqt*
 
-RUN python -m pip install pyquaternion
+RUN sudo apt install python3-pycryptodome -y
+RUN python -m pip install pyquaternion pycryptodome 
+
+# for data analysis i need python3
+RUN pip install python3 
+RUN pip3 install numpy rospkg matplotlib scipy pandas netifaces
 
 # Install Faster
 RUN mkdir -p /home/kota/ws/src

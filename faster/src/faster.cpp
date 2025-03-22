@@ -360,8 +360,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   // Don't plan if drone is not traveling
   if (drone_status_ == DroneStatus::GOAL_REACHED || (drone_status_ == DroneStatus::YAWING))
   {
-    std::cout << "No replanning needed because" << std::endl;
-    print_status();
+    // std::cout << "No replanning needed because" << std::endl;
+    // print_status();
     return;
   }
 
@@ -446,7 +446,17 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     */
     // Solve with Gurobi
     MyTimer whole_gurobi_t(true);
-    bool solved_whole = sg_whole_.genNewTraj(gurobi_whole_run_time_ms);
+
+    bool solved_whole = false;
+    try
+    {
+      solved_whole = sg_whole_.genNewTraj(gurobi_whole_run_time_ms);
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << bold << red << "Exception caught in genNewTraj for whole trajectory" << reset << std::endl;
+      return;
+    }
 
     if (solved_whole == false)
     {
@@ -555,7 +565,17 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     sg_safe_.setForceFinalConstraint(shouldForceFinalConstraint_for_Safe);
     MyTimer safe_gurobi_t(true);
     std::cout << "Calling Gurobi" << std::endl;
-    bool solved_safe = sg_safe_.genNewTraj(gurobi_safe_run_time_ms);
+    bool solved_safe = false;
+
+    try
+    {
+      solved_safe = sg_safe_.genNewTraj(gurobi_safe_run_time_ms);
+    }
+    catch (const std::exception& e)
+    {
+      std::cout << bold << red << "Exception caught in genNewTraj for safe trajectory" << reset << std::endl;
+      return;
+    }
 
     if (solved_safe == false)
     {

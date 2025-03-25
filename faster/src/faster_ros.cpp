@@ -190,6 +190,13 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
   replanCBTimer_.start();
 }
 
+FasterRos::~FasterRos()
+{
+  faster_ptr_->recordData();
+  // ros sleep for 2 second to make sure that the data is recorded
+  ros::Duration(2.0).sleep();
+}
+
 void FasterRos::replanCB(const ros::TimerEvent& e)
 {
   if (ros::ok())

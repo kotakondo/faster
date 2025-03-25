@@ -78,6 +78,7 @@ Faster::Faster(parameters par) : par_(par)
 
   // clear all the computation times
   replan_times_.clear();
+  jps_run_time_ms_.clear();
   gurobi_whole_run_time_ms_.clear();
   gurobi_safe_run_time_ms_.clear();
   simulation_number_ = par_.simulation_number;
@@ -102,8 +103,8 @@ void Faster::createMoreVertexes(vec_Vecf<3>& path, double d)
   }
 }
 
-// destructor
-Faster::~Faster()
+// record the computation times
+void Faster::recordData()
 {
   
   std::cout << "writing computation times to csv file" << std::endl;
@@ -113,10 +114,11 @@ Faster::~Faster()
   if (!csvFile.is_open()) {
       std::cerr << "Error: Could not open CSV file for writing." << std::endl;
   }
-  csvFile << "ComputationTime (micro seconds) for sim number " << simulation_number_ << std::endl;
-  csvFile << "total_replan, gurobi_whole, gurobi_safe" << std::endl;
+  csvFile << "ComputationTime [ms] for sim number " << simulation_number_ << std::endl;
+  csvFile << "total_replan, jps, gurobi_whole, gurobi_safe" << std::endl;
+  std::cout << "replan_times_.size()=" << replan_times_.size() << std::endl;
   for (int i = 0; i < replan_times_.size(); i++) {
-      csvFile << replan_times_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << std::endl;
+      csvFile << replan_times_[i] << ", " << jps_run_time_ms_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << std::endl;
   }
   csvFile.close();
   std::cout << "done writing computation times to csv file" << std::endl;
@@ -389,6 +391,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
 
   vec_Vecf<3> JPSk = jps_manager_.solveJPS3D(A.pos, G.pos, &solvedjps, 1);
 
+  double jps_run_time_ms = timer_jps.ElapsedMs();
+
   if (solvedjps == false)
   {
     std::cout << bold << red << "JPS didn't find a solution" << std::endl;
@@ -583,15 +587,17 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       return;
     }
 
-    // record the computation time
-    replan_times_.push_back(timer_replan.ElapsedMs());
-    gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
-    gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
 
     // Get the solution
     sg_safe_.fillX();
     X_safe_out = sg_safe_.X_temp_;
   }
+
+  // record the computation time
+  replan_times_.push_back(timer_replan.ElapsedMs());
+  jps_run_time_ms_.push_back(jps_run_time_ms);
+  gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
+  gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
 
   /*  std::cout << "This is the SAFE TRAJECTORY" << std::endl;
     printStateVector(sg_safe_.X_temp_);
@@ -650,10 +656,13 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   return;
 }
 
-void Faster::getComputationTimeVectors(std::vector<double>& replan_times, std::vector<double>& gurobi_whole_run_time_ms,
+void Faster::getComputationTimeVectors(std::vector<double>& replan_times, 
+                                       std::vector<double>& jps_run_time_ms,
+                                       std::vector<double>& gurobi_whole_run_time_ms,
                                        std::vector<double>& gurobi_safe_run_time_ms)
 {
   replan_times = replan_times_;
+  jps_run_time_ms = jps_run_time_ms_;
   gurobi_whole_run_time_ms = gurobi_whole_run_time_ms_;
   gurobi_safe_run_time_ms = gurobi_safe_run_time_ms_;
 }

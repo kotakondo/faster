@@ -54,7 +54,7 @@ class Faster
 {
 public:
   Faster(parameters par);
-  ~Faster();
+  void recordData();
   void replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E<Polyhedron<3>>& poly_safe_out,
               vec_E<Polyhedron<3>>& poly_whole_out, std::vector<state>& X_safe_out, std::vector<state>& X_whole_out);
   void updateState(state data);
@@ -68,6 +68,7 @@ public:
 
   // computation time
   std::vector<double> replan_times_;
+  std::vector<double> jps_run_time_ms_;
   std::vector<double> gurobi_whole_run_time_ms_;
   std::vector<double> gurobi_safe_run_time_ms_;
   int simulation_number_ = 100;
@@ -116,8 +117,10 @@ private:
   bool initializedAllExceptPlanner();
 
   void print_status();
-  void getComputationTimeVectors(std::vector<double>& replan_times, std::vector<double>& gurobi_whole_run_time_ms,
-                                       std::vector<double>& gurobi_safe_run_time_ms);
+  void getComputationTimeVectors(std::vector<double>& replan_times, 
+                                  std::vector<double>& jps_run_time_ms,
+                                  std::vector<double>& gurobi_whole_run_time_ms,
+                                  std::vector<double>& gurobi_safe_run_time_ms);
 
   parameters par_;
 

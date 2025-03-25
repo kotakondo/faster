@@ -32,7 +32,7 @@ def extract_number(filename):
     else:
         return float('inf')  # Place files with no number at the end
 
-def process_bag(bag_file, tol=0.5):
+def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_constraint=30.0):
     """
     Process a single bag file.
     
@@ -57,11 +57,6 @@ def process_bag(bag_file, tol=0.5):
     accelerations = []
     jerks = []
     positions = []  # List to record positions for path length computation
-
-    # Dynamic constraints
-    v_constraint = 10.0    # m/s
-    a_constraint = 20.0    # m/s^2
-    j_constraint = 30.0    # m/s^3
 
     # Violation counts
     vel_violations = 0
@@ -191,14 +186,17 @@ def save_plots(bag_file, results):
     print("  Saved vel/accel/jerk time history plot to:", time_history_path)
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: {} <bag_folder> [tolerance (m)]".format(sys.argv[0]))
+    if len(sys.argv) < 5:
+        print("Usage: {} <bag_folder> [tolerance (m)] <v_max> <a_max> <j_max>".format(sys.argv[0]))
         sys.exit(1)
 
     bag_folder = sys.argv[1]
     tol = 0.5
     if len(sys.argv) > 2:
         tol = float(sys.argv[2])
+    v_constraint = float(sys.argv[3])
+    a_constraint = float(sys.argv[4])
+    j_constraint = float(sys.argv[5])
 
     bag_files = glob.glob(os.path.join(bag_folder, "*.bag"))
     if not bag_files:
@@ -219,7 +217,7 @@ def main():
     stats_lines.append("Bag File Statistics:\n\n")
 
     for bag_file in bag_files:
-        result = process_bag(bag_file, tol)
+        result = process_bag(bag_file, tol, v_constraint, a_constraint, j_constraint)
         if result is None:
             stats_lines.append(f"{os.path.basename(bag_file)}: Could not compute travel time (missing /goal or goal reached)\n\n")
             continue

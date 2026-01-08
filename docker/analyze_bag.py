@@ -85,7 +85,6 @@ def compute_Jsmooth_and_Seff(times, jerk_norms, jerk_x=None, jerk_y=None, jerk_z
     T = max(float(t[-1] - t[0]), 1e-12)
     J_smooth = float(np.sqrt(J2 / T))
 
-    # Snap (prefer vector jerk; fallback to d/dt(||j||))
     if jerk_x is not None and jerk_y is not None and jerk_z is not None:
         jx = np.asarray(jerk_x, dtype=float)[:t.size]
         jy = np.asarray(jerk_y, dtype=float)[:t.size]
@@ -119,14 +118,9 @@ def compute_Jsmooth_and_Seff(times, jerk_norms, jerk_x=None, jerk_y=None, jerk_z
 
 def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_constraint=30.0):
     """
-    Travel time definition (MATCHES your Python3 reference):
-      - start_time: first time commanded position moves > tol from initial commanded position (after term_goal)
-      - end_time: first time commanded position is within tol of goal_position
-      - travel_time = end_time - start_time
-
-    Violation percentages:
-      - Uses 1% slack: thresh = constraint * 1.01
-      - Percent = violations / total_cmds_logged * 100
+    Constraints are PER-AXIS (not norm):
+      violation if any(|vx|,|vy|,|vz|) > v_thresh (same for accel, jerk)
+    Uses 1% slack exactly like your reference: thresh = limit * 1.01
     """
     bag = rosbag.Bag(bag_file)
 
@@ -136,9 +130,11 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
     start_time = None
     end_time = None
 
-    # We will only log samples AFTER start_time is detected (same as reference).
+    # Logged after start_time detected
     pos_cmd_times = []
     positions = []
+
+    # For plotting / smoothness: keep norm signals
     velocities = []
     accelerations = []
     jerks = []
@@ -147,6 +143,7 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
     # For start-of-motion detection
     initial_pos_ref = None
 
+    # Violations (per-axis)
     vel_violations = 0
     acc_violations = 0
     jerk_violations = 0
@@ -177,46 +174,39 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
 
         pos = (msg.p.x, msg.p.y, msg.p.z)
 
-        # --- Start-of-motion detection (same logic as reference) ---
+        # Start-of-motion detection (same as reference)
         if start_time is None:
             if initial_pos_ref is None:
                 initial_pos_ref = pos
-                # do NOT log this sample (reference skips stationary period)
                 continue
-
             if compute_distance(pos, initial_pos_ref) <= tol:
-                # still stationary near the initial commanded point
                 continue
-
-            # Moved > tol => start_time detected
             start_time = pos_time
             print("  Start of travel detected at time {0:.3f}".format(start_time))
-            # fallthrough: log this sample as first in the travel segment
+            # fallthrough to log this sample
 
-        # --- Log samples (only after start_time) ---
+        # Log samples (only after start)
         total_cmds += 1
         pos_cmd_times.append(pos_time)
         positions.append(pos)
 
-        vel = float(np.linalg.norm([msg.v.x, msg.v.y, msg.v.z]))
-        acc = float(np.linalg.norm([msg.a.x, msg.a.y, msg.a.z]))
+        # Per-axis values
+        vx, vy, vz = float(msg.v.x), float(msg.v.y), float(msg.v.z)
+        ax, ay, az = float(msg.a.x), float(msg.a.y), float(msg.a.z)
+        jx, jy, jz = float(msg.j.x), float(msg.j.y), float(msg.j.z)
 
-        jx = float(msg.j.x)
-        jy = float(msg.j.y)
-        jz = float(msg.j.z)
-        jrk = float(np.linalg.norm([jx, jy, jz]))
-
-        velocities.append(vel)
-        accelerations.append(acc)
-        jerks.append(jrk)
+        # Norm signals (only for plots / smoothness metrics)
+        velocities.append(float(np.linalg.norm([vx, vy, vz])))
+        accelerations.append(float(np.linalg.norm([ax, ay, az])))
+        jerks.append(float(np.linalg.norm([jx, jy, jz])))
         jerk_x.append(jx); jerk_y.append(jy); jerk_z.append(jz)
 
-        # violations with 1% slack
-        if vel > v_thresh:
+        # PER-AXIS violations (any axis exceeds)
+        if (abs(vx) > v_thresh) or (abs(vy) > v_thresh) or (abs(vz) > v_thresh):
             vel_violations += 1
-        if acc > a_thresh:
+        if (abs(ax) > a_thresh) or (abs(ay) > a_thresh) or (abs(az) > a_thresh):
             acc_violations += 1
-        if jrk > j_thresh:
+        if (abs(jx) > j_thresh) or (abs(jy) > j_thresh) or (abs(jz) > j_thresh):
             jerk_violations += 1
 
         # Goal reached?
@@ -239,13 +229,13 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
 
     travel_time = float(end_time - start_time)
 
-    # Path length on the logged travel segment
+    # Path length
     path_length = 0.0
     if len(positions) >= 2:
         for i in range(len(positions) - 1):
             path_length += compute_distance(positions[i], positions[i + 1])
 
-    # Smoothness + RMS jerk/snap on the travel segment
+    # Smoothness + RMS jerk/snap (still uses jerk norm + components; independent of constraint definition)
     t_arr = np.asarray(pos_cmd_times, dtype=float)
     j_arr = np.asarray(jerks, dtype=float)
 
@@ -292,11 +282,11 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
 
     plt.figure()
     plt.hist(results["velocities"], bins=20, edgecolor="black")
-    plt.xlabel("Velocity (m/s)")
+    plt.xlabel("Velocity norm (m/s)")
     plt.ylabel("Frequency")
-    plt.title("Velocity Profile Histogram")
+    plt.title("Velocity Norm Histogram")
     plt.axvline(x=v_constraint, color="red", linestyle="--",
-                label="v constraint = {0} m/s".format(v_constraint))
+                label="v_limit (axis) = {0} m/s".format(v_constraint))
     plt.legend()
     plt.grid(True)
     hist_path = os.path.join(folder, "{0}_velocity_profile.pdf".format(base_name))
@@ -314,31 +304,21 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     plt.figure(figsize=(12, 12 if use_snap else 10))
 
     plt.subplot(rows, 1, 1)
-    plt.plot(t, v, label="Velocity (m/s)")
-    plt.axhline(y=v_constraint, color="red", linestyle="--",
-                label="v constraint = {0} m/s".format(v_constraint))
-    plt.legend()
-    plt.grid(True)
+    plt.plot(t, v, label="Velocity norm (m/s)")
+    plt.legend(); plt.grid(True)
 
     plt.subplot(rows, 1, 2)
-    plt.plot(t, a, label="Acceleration (m/s^2)")
-    plt.axhline(y=a_constraint, color="red", linestyle="--",
-                label="a constraint = {0} m/s^2".format(a_constraint))
-    plt.legend()
-    plt.grid(True)
+    plt.plot(t, a, label="Acceleration norm (m/s^2)")
+    plt.legend(); plt.grid(True)
 
     plt.subplot(rows, 1, 3)
-    plt.plot(t, j, label="Jerk (m/s^3)")
-    plt.axhline(y=j_constraint, color="red", linestyle="--",
-                label="j constraint = {0} m/s^3".format(j_constraint))
-    plt.legend()
-    plt.grid(True)
+    plt.plot(t, j, label="Jerk norm (m/s^3)")
+    plt.legend(); plt.grid(True)
 
     if use_snap:
         plt.subplot(rows, 1, 4)
         plt.plot(t, s, label="Snap (m/s^4)")
-        plt.legend()
-        plt.grid(True)
+        plt.legend(); plt.grid(True)
 
     plt.tight_layout()
     suffix = "_vel_accel_jerk_snap.pdf" if use_snap else "_vel_accel_jerk.pdf"
@@ -348,9 +328,8 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
 
 
 def main():
-    # script bag_folder tol v_max a_max j_max
     if len(sys.argv) < 6:
-        print("Usage: {0} <bag_folder> <tolerance (m)> <v_max> <a_max> <j_max>".format(sys.argv[0]))
+        print("Usage: {0} <bag_folder> <tolerance (m)> <v_max_axis> <a_max_axis> <j_max_axis>".format(sys.argv[0]))
         sys.exit(1)
 
     bag_folder = sys.argv[1]
@@ -378,9 +357,9 @@ def main():
     overall_cmds = 0
 
     processed_count = 0
-
     stats_lines = []
     stats_lines.append("Bag File Statistics:\n\n")
+    stats_lines.append("Note: constraint violations are PER-AXIS with 1% slack.\n\n")
 
     for bag_file in bag_files:
         result = process_bag(bag_file, tol, v_constraint, a_constraint, j_constraint)
@@ -408,11 +387,11 @@ def main():
         stats_lines.append("  J_smooth (RMS jerk): {0:.6f} m/s^3\n".format(result["J_smooth"]))
         stats_lines.append("  S_eff (RMS snap): {0:.6f} m/s^4\n".format(result["S_eff"]))
 
-        stats_lines.append("  Velocity violations (>{0} m/s, +1% slack): {1} ({2:.2f}%)\n".format(
+        stats_lines.append("  Velocity violations (|v_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n".format(
             v_constraint, result["vel_violations"], result["vel_violate_pct"]))
-        stats_lines.append("  Acceleration violations (>{0} m/s^2, +1% slack): {1} ({2:.2f}%)\n".format(
+        stats_lines.append("  Acceleration violations (|a_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n".format(
             a_constraint, result["acc_violations"], result["acc_violate_pct"]))
-        stats_lines.append("  Jerk violations (>{0} m/s^3, +1% slack): {1} ({2:.2f}%)\n\n".format(
+        stats_lines.append("  Jerk violations (|j_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n\n".format(
             j_constraint, result["jerk_violations"], result["jerk_violate_pct"]))
 
         save_plots(bag_file, result, v_constraint, a_constraint, j_constraint, show_snap=True)
@@ -441,7 +420,6 @@ def main():
                 (float(overall_jerk_violations) / float(overall_cmds)) * 100.0))
         else:
             stats_lines.append("  No command samples counted for violation percentages.\n")
-
     else:
         stats_lines.append("No valid travel times computed from the bag files.\n")
 

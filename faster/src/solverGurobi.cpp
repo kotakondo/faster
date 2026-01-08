@@ -121,50 +121,35 @@ void SolverGurobi::setObjective()  // I need to set it every time, because the o
 
 void SolverGurobi::fillX()
 {
-  double t = 0;
-  int interval = 0;
-  //#pragma omp parallel for
-  //  {
-
-  for (int i = 0; i < X_temp_.size(); i++)
+  const double T = N_ * dt_;
+  for (int i = 0; i < (int)X_temp_.size(); ++i)
   {
-    t = t + DC;
-    if (t > dt_ * (interval + 1))
-    {
-      interval = std::min(interval + 1, N_ - 1);
-    }
+    double t = i * DC;
+    if (t > T) t = T;
 
-    double posx = getPos(interval, t - interval * dt_, 0).getValue();
-    double posy = getPos(interval, t - interval * dt_, 1).getValue();
-    double posz = getPos(interval, t - interval * dt_, 2).getValue();
+    int interval = std::min((int)std::floor(t / dt_), N_ - 1);
+    double tau = t - interval * dt_;
+    if (tau > dt_) tau = dt_;  // safety
 
-    double velx = getVel(interval, t - interval * dt_, 0).getValue();
-    double vely = getVel(interval, t - interval * dt_, 1).getValue();
-    double velz = getVel(interval, t - interval * dt_, 2).getValue();
-
-    double accelx = getAccel(interval, t - interval * dt_, 0).getValue();
-    double accely = getAccel(interval, t - interval * dt_, 1).getValue();
-    double accelz = getAccel(interval, t - interval * dt_, 2).getValue();
-
-    double jerkx = getJerk(interval, t - interval * dt_, 0).getValue();
-    double jerky = getJerk(interval, t - interval * dt_, 1).getValue();
-    double jerkz = getJerk(interval, t - interval * dt_, 2).getValue();
-
-    state state_i;
-    state_i.setPos(posx, posy, posz);
-    state_i.setVel(velx, vely, velz);
-    state_i.setAccel(accelx, accely, accelz);
-    state_i.setJerk(jerkx, jerky, jerkz);
-    X_temp_[i] = (state_i);
+    state s;
+    s.setPos(getPos(interval, tau, 0).getValue(),
+             getPos(interval, tau, 1).getValue(),
+             getPos(interval, tau, 2).getValue());
+    s.setVel(getVel(interval, tau, 0).getValue(),
+             getVel(interval, tau, 1).getValue(),
+             getVel(interval, tau, 2).getValue());
+    s.setAccel(getAccel(interval, tau, 0).getValue(),
+               getAccel(interval, tau, 1).getValue(),
+               getAccel(interval, tau, 2).getValue());
+    s.setJerk(getJerk(interval, tau, 0).getValue(),
+              getJerk(interval, tau, 1).getValue(),
+              getJerk(interval, tau, 2).getValue());
+    X_temp_[i] = s;
   }
 
-  // }  // End pragma parallel
-
-  // Force the final input to be 0 (I'll keep applying this input if when I arrive to the final state I still
-  // haven't planned again).
-  X_temp_[X_temp_.size() - 1].vel = Eigen::Vector3d::Zero().transpose();
-  X_temp_[X_temp_.size() - 1].accel = Eigen::Vector3d::Zero().transpose();
-  X_temp_[X_temp_.size() - 1].jerk = Eigen::Vector3d::Zero().transpose();
+  // Only do this if your controller truly needs to hold zero input AFTER the planned horizon.
+  // Otherwise, remove it; it distorts logged velocities.
+  // X_temp_.back().vel.setZero(); X_temp_.back().accel.setZero(); X_temp_.back().jerk.setZero();
 }
 
 void SolverGurobi::setForceFinalConstraint(bool forceFinalConstraint)
@@ -381,10 +366,10 @@ void SolverGurobi::setConstraintsX0()
 
 void SolverGurobi::resetX()
 {
-  int size = (int)(N_)*dt_ / DC;
-  size = (size < 2) ? 2 : size;  // force size to be at least 2
-  std::vector<state> tmp(size);
-  X_temp_ = tmp;
+  const double T = N_ * dt_;
+  int size = (int)std::ceil(T / DC) + 1;   // include t=0 and t=T
+  size = std::max(size, 2);
+  X_temp_.assign(size, state());
 }
 
 void SolverGurobi::setMaxConstraints()
@@ -423,7 +408,7 @@ void SolverGurobi::setFactorInitialAndFinalAndIncrement(double factor_initial, d
   factor_increment_ = factor_increment;
 }
 
-bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
+bool SolverGurobi::genNewTraj()
 {
   bool solved = false;
 
@@ -445,30 +430,17 @@ bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
   for (double i = factor_initial_; i <= factor_final_ && solved == false && cb_.should_terminate_ == false;
        i = i + factor_increment_)
   {
+    trials_ = trials_ + 1;
+    findDT(i);
+    // std::cout << "Going to try with dt_= " << dt_ << ", should_terminate_=" << cb_.should_terminate_ << std::endl;
+    setPolytopesConstraints();
+    setConstraintsX0();
+    setConstraintsXf();
+    setDynamicConstraints();
+    setObjective();
+    resetX();
 
-    try
-    {
-      trials_ = trials_ + 1;
-      findDT(i);
-      // std::cout << "Going to try with dt_= " << dt_ << ", should_terminate_=" << cb_.should_terminate_ << std::endl;
-      setPolytopesConstraints();
-      setConstraintsX0();
-      setConstraintsXf();
-      setDynamicConstraints();
-      setObjective();
-      resetX();
-
-      solved = callOptimizer(gurobi_run_time_ms);
-    }
-    catch (GRBException e)
-    {
-      std::cout << "Error code = " << e.getErrorCode() << std::endl;
-      std::cout << e.getMessage() << std::endl;
-    }
-    catch (...)
-    {
-      std::cout << "Exception during optimization" << std::endl;
-    }
+    solved = callOptimizer();
     /*    if (solved == true)
         {
           solved = isWmaxSatisfied();
@@ -559,7 +531,7 @@ bool SolverGurobi::isWmaxSatisfied()
   return true;
 }
 
-bool SolverGurobi::callOptimizer(double& gurobi_run_time_ms)
+bool SolverGurobi::callOptimizer()
 {
   // int threads = m.get(GRB_IntParam_Threads);
 
@@ -584,7 +556,6 @@ bool SolverGurobi::callOptimizer(double& gurobi_run_time_ms)
   //          << std::endl;
 
   runtime_ms_ = runtime_ms_ + m.get(GRB_DoubleAttr_Runtime) * 1000;
-  gurobi_run_time_ms = m.get(GRB_DoubleAttr_Runtime) * 1000;
 
   /*  times_log.open("/home/jtorde/Desktop/ws/src/acl-planning/faster/models/times_log.txt", std::ios_base::app);
     times_log << elapsed << "\n";

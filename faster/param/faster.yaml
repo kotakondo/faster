@@ -37,7 +37,7 @@ delta_H: 1.0
 
 max_poly_whole: 3 #Should be less than N_whole 
 max_poly_safe: 3 #Should be less than N_safe
-dist_max_vertexes: 1.5 #[m] Maximum distance between two vertexes in the JPS before doing the cvx decomp (more vertexes are added to force this)
+dist_max_vertexes: 3.0 #[m] Maximum distance between two vertexes in the JPS before doing the cvx decomp (more vertexes are added to force this)
 gurobi_threads: 0 #[threads] Number of threads that Gurobi will use. If 0, Gurobi will try to choose all the cores.  If computer is maxed out, threads=1 works faster!
 gurobi_verbose: 0 #Verbosity of Gurobi. 0 or 1
 

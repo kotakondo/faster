@@ -425,6 +425,10 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   //////////////////////////////////////////////////////////////////////////
   double gurobi_whole_run_time_ms = 0.0;
   double gurobi_safe_run_time_ms = 0.0;
+  double total_opt_whole_run_time_ms = 0.0;
+  double total_safe_whole_run_time_ms = 0.0;
+  bool solved_whole = false;
+  bool solved_safe = false;
 
   if (par_.use_faster == true)
   {
@@ -455,7 +459,6 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     // Solve with Gurobi
     MyTimer whole_gurobi_t(true);
 
-    bool solved_whole = false;
     try
     {
       solved_whole = sg_whole_.genNewTraj(gurobi_whole_run_time_ms);
@@ -466,7 +469,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       return;
     }
 
-    double total_opt_whole_run_time_ms = whole_gurobi_t.ElapsedMs();
+    total_opt_whole_run_time_ms = whole_gurobi_t.ElapsedMs();
 
     if (solved_whole == false)
     {
@@ -575,7 +578,6 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     sg_safe_.setForceFinalConstraint(shouldForceFinalConstraint_for_Safe);
     MyTimer safe_gurobi_t(true);
     std::cout << "Calling Gurobi" << std::endl;
-    bool solved_safe = false;
 
     try
     {
@@ -587,7 +589,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       return;
     }
 
-    double total_safe_whole_run_time_ms = safe_gurobi_t.ElapsedMs();
+    total_safe_whole_run_time_ms = safe_gurobi_t.ElapsedMs();
 
     if (solved_safe == false)
     {
@@ -604,10 +606,17 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   // record the computation time
   replan_times_.push_back(timer_replan.ElapsedMs());
   jps_run_time_ms_.push_back(jps_run_time_ms);
-  gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
-  total_opt_whole_run_time_ms_.push_back(total_opt_whole_run_time_ms);
-  gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
-  total_safe_whole_run_time_ms_.push_back(total_safe_whole_run_time_ms);
+  if (solved_whole)
+  {
+    gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
+    total_opt_whole_run_time_ms_.push_back(total_opt_whole_run_time_ms);
+  }
+
+  if (solved_safe)
+  {
+    gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
+    total_safe_whole_run_time_ms_.push_back(total_safe_whole_run_time_ms);
+  }
 
   /*  std::cout << "This is the SAFE TRAJECTORY" << std::endl;
     printStateVector(sg_safe_.X_temp_);

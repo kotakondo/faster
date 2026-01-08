@@ -408,7 +408,7 @@ void SolverGurobi::setFactorInitialAndFinalAndIncrement(double factor_initial, d
   factor_increment_ = factor_increment;
 }
 
-bool SolverGurobi::genNewTraj()
+bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
 {
   bool solved = false;
 
@@ -430,17 +430,30 @@ bool SolverGurobi::genNewTraj()
   for (double i = factor_initial_; i <= factor_final_ && solved == false && cb_.should_terminate_ == false;
        i = i + factor_increment_)
   {
-    trials_ = trials_ + 1;
-    findDT(i);
-    // std::cout << "Going to try with dt_= " << dt_ << ", should_terminate_=" << cb_.should_terminate_ << std::endl;
-    setPolytopesConstraints();
-    setConstraintsX0();
-    setConstraintsXf();
-    setDynamicConstraints();
-    setObjective();
-    resetX();
 
-    solved = callOptimizer();
+    try
+    {
+      trials_ = trials_ + 1;
+      findDT(i);
+      // std::cout << "Going to try with dt_= " << dt_ << ", should_terminate_=" << cb_.should_terminate_ << std::endl;
+      setPolytopesConstraints();
+      setConstraintsX0();
+      setConstraintsXf();
+      setDynamicConstraints();
+      setObjective();
+      resetX();
+
+      solved = callOptimizer(gurobi_run_time_ms);
+    }
+    catch (GRBException e)
+    {
+      std::cout << "Error code = " << e.getErrorCode() << std::endl;
+      std::cout << e.getMessage() << std::endl;
+    }
+    catch (...)
+    {
+      std::cout << "Exception during optimization" << std::endl;
+    }
     /*    if (solved == true)
         {
           solved = isWmaxSatisfied();
@@ -531,7 +544,7 @@ bool SolverGurobi::isWmaxSatisfied()
   return true;
 }
 
-bool SolverGurobi::callOptimizer()
+bool SolverGurobi::callOptimizer(double& gurobi_run_time_ms)
 {
   // int threads = m.get(GRB_IntParam_Threads);
 
@@ -556,6 +569,7 @@ bool SolverGurobi::callOptimizer()
   //          << std::endl;
 
   runtime_ms_ = runtime_ms_ + m.get(GRB_DoubleAttr_Runtime) * 1000;
+  gurobi_run_time_ms = m.get(GRB_DoubleAttr_Runtime) * 1000;
 
   /*  times_log.open("/home/jtorde/Desktop/ws/src/acl-planning/faster/models/times_log.txt", std::ios_base::app);
     times_log << elapsed << "\n";

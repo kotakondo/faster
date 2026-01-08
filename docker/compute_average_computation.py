@@ -3,155 +3,222 @@ import os
 import sys
 import glob
 import csv
+import math
+
+def _to_float_or_nan(s):
+    """Parse float; return NaN on failure."""
+    try:
+        return float(str(s).strip())
+    except Exception:
+        return float('nan')
+
+def _is_valid(x):
+    """True if x is a finite float."""
+    try:
+        return (x is not None) and (not math.isnan(x)) and (not math.isinf(x))
+    except Exception:
+        return False
 
 def compute_averages_for_file(filepath):
     """
-    Reads a CSV file that has two header lines:
-      - First line: a title (skipped)
-      - Second line: column headers: total_replan, jps, gurobi_whole, gurobi_safe
-    Then, for each subsequent row, the four columns are parsed (as floats).
-    For gurobi_safe, only nonzero values are accumulated and counted.
-    Returns a tuple:
-      (avg_total_replan, avg_jps, avg_gurobi_whole, avg_gurobi_safe, sample_count, safe_sample_count)
-    If the file is empty or the header cannot be read, returns None.
+    Expected CSV layout:
+      line1: title (skip)
+      line2: header: total_replan, jps, gurobi_whole, total_local_whole, gurobi_safe, total_local_safe
+      lines3+: numeric rows, possibly containing 'nan'
+
+    Computes averages for:
+      - total_replan
+      - total_local_whole
+      - total_local_safe
+
+    NaNs are skipped per-field.
+    Returns dict with sums/counts and averages.
     """
-    total_replan_sum = 0.0
-    jps_sum = 0.0
-    gurobi_whole_sum = 0.0
-    gurobi_safe_sum = 0.0
-    count = 0
-    safe_count = 0
+    # sums and counts (independent counts per metric since we skip NaNs)
+    sums = {"total_replan": 0.0, "total_local_whole": 0.0, "total_local_safe": 0.0}
+    cnts = {"total_replan": 0,   "total_local_whole": 0,   "total_local_safe": 0}
+
+    rows_seen = 0
 
     try:
-        with open(filepath, "r") as f:
-            # Skip first header line (title)
-            f.readline()
-            reader = csv.reader(f)
-            # Read the column header line: "total_replan, jps, gurobi_whole, gurobi_safe"
-            try:
-                header = next(reader)
-            except StopIteration:
-                return None  # File has no header
-            for row in reader:
-                if not row or len(row) < 4:
-                    continue
-                try:
-                    total_replan = float(row[0].strip())
-                    jps = float(row[1].strip())
-                    gurobi_whole = float(row[2].strip())
-                    gurobi_safe = float(row[3].strip())
-                    total_replan_sum += total_replan
-                    jps_sum += jps
-                    gurobi_whole_sum += gurobi_whole
-                    count += 1
-                    # Only count nonzero safe values.
-                    if gurobi_safe != 0.0:
-                        gurobi_safe_sum += gurobi_safe
-                        safe_count += 1
-                except Exception:
-                    continue
+        f = open(filepath, "r")
     except Exception:
-        return None  # In case the file cannot be opened/read
+        return None
 
-    if count > 0:
-        avg_total_replan = total_replan_sum / count
-        avg_jps = jps_sum / count
-        avg_gurobi_whole = gurobi_whole_sum / count
-    else:
-        avg_total_replan = None
-        avg_jps = None
-        avg_gurobi_whole = None
+    try:
+        # Skip first line (title)
+        f.readline()
 
-    if safe_count > 0:
-        avg_gurobi_safe = gurobi_safe_sum / safe_count
-    else:
-        avg_gurobi_safe = None
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return None
 
-    return avg_total_replan, avg_jps, avg_gurobi_whole, avg_gurobi_safe, count, safe_count
+        # Build a column index map from header text (robust to whitespace)
+        header_map = {}
+        for i, name in enumerate(header):
+            key = str(name).strip()
+            header_map[key] = i
+
+        required = ["total_replan", "total_local_whole", "total_local_safe"]
+        for k in required:
+            if k not in header_map:
+                # Older file format or unexpected header
+                return None
+
+        for row in reader:
+            if not row:
+                continue
+            rows_seen += 1
+
+            tr = _to_float_or_nan(row[header_map["total_replan"]])
+            tw = _to_float_or_nan(row[header_map["total_local_whole"]])
+            ts = _to_float_or_nan(row[header_map["total_local_safe"]])
+
+            if _is_valid(tr):
+                sums["total_replan"] += tr
+                cnts["total_replan"] += 1
+            if _is_valid(tw):
+                sums["total_local_whole"] += tw
+                cnts["total_local_whole"] += 1
+            if _is_valid(ts):
+                sums["total_local_safe"] += ts
+                cnts["total_local_safe"] += 1
+
+    finally:
+        f.close()
+
+    # Averages
+    avgs = {}
+    for k in sums.keys():
+        avgs[k] = (sums[k] / cnts[k]) if cnts[k] > 0 else None
+
+    return {
+        "rows_seen": rows_seen,
+        "sums": sums,
+        "cnts": cnts,
+        "avgs": avgs,
+    }
+
+def _fmt_ms(x):
+    return "N/A" if x is None else "{:.2f}".format(x)
+
+def _fmt_count(n):
+    return "{:d}".format(int(n))
 
 def main():
     if len(sys.argv) < 2:
         print("Usage: {} <folder_path>".format(sys.argv[0]))
         sys.exit(1)
-    
+
     folder = sys.argv[1]
     pattern = os.path.join(folder, "computation_times_num_*.csv")
-    file_list = glob.glob(pattern)
+    file_list = sorted(glob.glob(pattern))
     if not file_list:
         print("No files matching pattern found in folder: {}".format(folder))
         sys.exit(1)
-    
-    overall_total_replan_sum = 0.0
-    overall_jps_sum = 0.0
-    overall_gurobi_whole_sum = 0.0
-    overall_gurobi_safe_sum = 0.0
-    overall_count = 0
-    overall_safe_count = 0
-    results = []
-    
-    # Process each CSV file.
-    for filepath in sorted(file_list):
-        result = compute_averages_for_file(filepath)
+
+    per_file_rows = []
+    # overall sums/counts (weighted by valid sample counts per metric)
+    overall_sums = {"total_replan": 0.0, "total_local_whole": 0.0, "total_local_safe": 0.0}
+    overall_cnts = {"total_replan": 0,   "total_local_whole": 0,   "total_local_safe": 0}
+
+    print("")
+    print("Computation Time Summary (ms)")
+    print("Folder: {}".format(folder))
+    print("Files:  {}".format(len(file_list)))
+    print("")
+
+    # Header for console table
+    print("{:<32} {:>10} {:>18} {:>16} {:>10} {:>10} {:>10}".format(
+        "file", "rows", "avg_total_replan", "avg_total_whole", "avg_total_safe",
+        "n_replan", "n_safe"
+    ))
+    print("-" * 110)
+
+    for filepath in file_list:
         filename = os.path.basename(filepath)
+        result = compute_averages_for_file(filepath)
         if result is None:
-            print("File {}: Could not process (file may be empty or missing header).".format(filename))
+            print("{:<32} {:>10} {:>18} {:>16} {:>10} {:>10} {:>10}".format(
+                filename[:32], "ERR", "N/A", "N/A", "N/A", "0", "0"
+            ))
             continue
 
-        avg_total_replan, avg_jps, avg_gurobi_whole, avg_gurobi_safe, count, safe_count = result
+        avgs = result["avgs"]
+        cnts = result["cnts"]
 
-        if count > 0:
-            safe_avg_str = "{:.2f}".format(avg_gurobi_safe) if avg_gurobi_safe is not None else "N/A"
-            results.append((filename, "{:.2f}".format(avg_total_replan), "{:.2f}".format(avg_jps),
-                            "{:.2f}".format(avg_gurobi_whole), safe_avg_str))
-            overall_total_replan_sum += avg_total_replan * count
-            overall_jps_sum += avg_jps * count
-            overall_gurobi_whole_sum += avg_gurobi_whole * count
-            if avg_gurobi_safe is not None:
-                overall_gurobi_safe_sum += avg_gurobi_safe * safe_count
-                overall_safe_count += safe_count
-            overall_count += count
-            print("File {}: avg_total_replan = {:.2f} ms, avg_jps = {:.2f} ms, avg_gurobi_whole = {:.2f} ms, avg_gurobi_safe = {} ms ({} samples, {} safe samples)".format(
-                filename, avg_total_replan, avg_jps, avg_gurobi_whole, safe_avg_str, count, safe_count))
-        else:
-            results.append((filename, "N/A", "N/A", "N/A", "N/A"))
-            print("File {}: No valid samples found.".format(filename))
-    
-    if overall_count > 0:
-        overall_avg_total_replan = overall_total_replan_sum / overall_count
-        overall_avg_jps = overall_jps_sum / overall_count
-        overall_avg_gurobi_whole = overall_gurobi_whole_sum / overall_count
-    else:
-        overall_avg_total_replan = "N/A"
-        overall_avg_jps = "N/A"
-        overall_avg_gurobi_whole = "N/A"
-    
-    if overall_safe_count > 0:
-        overall_avg_gurobi_safe = overall_gurobi_safe_sum / overall_safe_count
-        overall_safe_avg_str = "{:.2f}".format(overall_avg_gurobi_safe)
-    else:
-        overall_avg_gurobi_safe = "N/A"
-        overall_safe_avg_str = "N/A"
-    
-    # Prepare rows for the output CSV.
-    rows = []
-    rows.append(["file_name", "avg_total_replan (ms)", "avg_jps (ms)", "avg_gurobi_whole (ms)", "avg_gurobi_safe (ms)"])
-    for row in results:
-        rows.append(row)
-    rows.append(["Overall", "{:.2f}".format(overall_avg_total_replan),
-                 "{:.2f}".format(overall_avg_jps),
-                 "{:.2f}".format(overall_avg_gurobi_whole),
-                 overall_safe_avg_str])
-    
-    # Write results to average_computation_times.csv in the given folder.
+        # Update overall (metric-wise)
+        for k in overall_sums.keys():
+            if cnts[k] > 0:
+                overall_sums[k] += avgs[k] * cnts[k]
+                overall_cnts[k] += cnts[k]
+
+        per_file_rows.append([
+            filename,
+            _fmt_ms(avgs["total_replan"]),
+            _fmt_ms(avgs["total_local_whole"]),
+            _fmt_ms(avgs["total_local_safe"]),
+            str(cnts["total_replan"]),
+            str(cnts["total_local_whole"]),
+            str(cnts["total_local_safe"]),
+        ])
+
+        print("{:<32} {:>10} {:>18} {:>16} {:>10} {:>10} {:>10} {:>10}".format(
+            filename[:32],
+            _fmt_count(result["rows_seen"]),
+            _fmt_ms(avgs["total_replan"]),
+            _fmt_ms(avgs["total_local_whole"]),
+            _fmt_ms(avgs["total_local_safe"]),
+            _fmt_count(cnts["total_replan"]),
+            _fmt_count(cnts["total_local_safe"]),
+            ""
+        ))
+
+    # Overall averages
+    overall_avgs = {}
+    for k in overall_sums.keys():
+        overall_avgs[k] = (overall_sums[k] / overall_cnts[k]) if overall_cnts[k] > 0 else None
+
+    print("-" * 110)
+    print("OVERALL (weighted by valid samples):")
+    print("  avg_total_replan     : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_replan"]), overall_cnts["total_replan"]))
+    print("  avg_total_whole      : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_local_whole"]), overall_cnts["total_local_whole"]))
+    print("  avg_total_safe       : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_local_safe"]), overall_cnts["total_local_safe"]))
+    print("")
+
+    # Write CSV output
     output_csv = os.path.join(folder, "average_computation_times.csv")
-    with open(output_csv, "wb") as f:
+    rows = []
+    rows.append([
+        "file_name",
+        "avg_total_replan_ms",
+        "avg_total_local_whole_ms",
+        "avg_total_local_safe_ms",
+        "n_total_replan",
+        "n_total_local_whole",
+        "n_total_local_safe",
+    ])
+    rows.extend(per_file_rows)
+    rows.append([
+        "Overall",
+        _fmt_ms(overall_avgs["total_replan"]),
+        _fmt_ms(overall_avgs["total_local_whole"]),
+        _fmt_ms(overall_avgs["total_local_safe"]),
+        str(overall_cnts["total_replan"]),
+        str(overall_cnts["total_local_whole"]),
+        str(overall_cnts["total_local_safe"]),
+    ])
+
+    f = open(output_csv, "wb")
+    try:
         writer = csv.writer(f)
         writer.writerows(rows)
-    
-    print("Overall averages (across {} samples, {} safe samples):".format(overall_count, overall_safe_count))
-    print("  total_replan = {:.2f} ms, jps = {:.2f} ms, gurobi_whole = {:.2f} ms, gurobi_safe = {}".format(
-          overall_avg_total_replan, overall_avg_jps, overall_avg_gurobi_whole, overall_safe_avg_str))
-    print("Averages saved to {}".format(output_csv))
+    finally:
+        f.close()
+
+    print("Saved averages to: {}".format(output_csv))
 
 if __name__ == "__main__":
     main()

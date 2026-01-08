@@ -83,17 +83,11 @@ def compute_averages_for_file(filepath):
     for k in sums.keys():
         avgs[k] = (sums[k] / cnts[k]) if cnts[k] > 0 else None
 
-    # Safe success rate relative to total replans with valid total_replan
-    safe_rate = None
-    if cnts["total_replan"] > 0:
-        safe_rate = 100.0 * float(cnts["total_local_safe"]) / float(cnts["total_replan"])
-
     return {
         "rows_seen": rows_seen,
         "sums": sums,
         "cnts": cnts,
         "avgs": avgs,
-        "safe_rate_pct": safe_rate,
     }
 
 def _fmt_ms(x):
@@ -103,14 +97,11 @@ def _fmt_count(n):
     return "{:d}".format(int(n))
 
 def _csv_num(x, ndigits=6):
-    """
-    For CSV: write numbers as numbers; missing as empty string.
-    """
+    """For CSV: write numbers as numbers; missing as empty string."""
     if x is None:
         return ""
     if not _is_valid(x):
         return ""
-    # keep as float with reasonable precision
     return round(float(x), ndigits)
 
 def main():
@@ -125,11 +116,9 @@ def main():
         print("No files matching pattern found in folder: {}".format(folder))
         sys.exit(1)
 
-    # overall sums/counts (weighted by valid sample counts per metric)
     overall_sums = {"total_replan": 0.0, "total_local_whole": 0.0, "total_local_safe": 0.0}
     overall_cnts = {"total_replan": 0,   "total_local_whole": 0,   "total_local_safe": 0}
 
-    # Store structured per-file stats for nicer CSV output
     per_file = []
 
     print("")
@@ -155,7 +144,6 @@ def main():
         avgs = result["avgs"]
         cnts = result["cnts"]
 
-        # Update overall (metric-wise, weighted)
         for k in overall_sums.keys():
             if cnts[k] > 0 and avgs[k] is not None:
                 overall_sums[k] += avgs[k] * cnts[k]
@@ -170,7 +158,6 @@ def main():
             "n_total_whole": cnts["total_local_whole"],
             "avg_total_safe": avgs["total_local_safe"],
             "n_total_safe": cnts["total_local_safe"],
-            "safe_rate_pct": result["safe_rate_pct"],
         })
 
         print("{:<32} {:>10} {:>18} {:>16} {:>10} {:>10} {:>10}".format(
@@ -183,46 +170,35 @@ def main():
             _fmt_count(cnts["total_local_safe"]),
         ))
 
-    # Overall averages
     overall_avgs = {}
     for k in overall_sums.keys():
         overall_avgs[k] = (overall_sums[k] / overall_cnts[k]) if overall_cnts[k] > 0 else None
-
-    overall_safe_rate = None
-    if overall_cnts["total_replan"] > 0:
-        overall_safe_rate = 100.0 * float(overall_cnts["total_local_safe"]) / float(overall_cnts["total_replan"])
 
     print("-" * 110)
     print("OVERALL (weighted by valid samples):")
     print("  avg_total_replan     : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_replan"]), overall_cnts["total_replan"]))
     print("  avg_total_whole      : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_local_whole"]), overall_cnts["total_local_whole"]))
     print("  avg_total_safe       : {} ms  (n={})".format(_fmt_ms(overall_avgs["total_local_safe"]), overall_cnts["total_local_safe"]))
-    print("  safe_success_rate    : {} %".format("N/A" if overall_safe_rate is None else "{:.2f}".format(overall_safe_rate)))
     print("")
 
-    # ---------------- Nicer CSV output ----------------
-    output_csv = os.path.join(folder, "total_computation_times.csv")
+    output_csv = os.path.join(folder, "average_computation_times.csv")
     f = open(output_csv, "wb")
     try:
         w = csv.writer(f)
 
-        # Title row + metadata-like note rows (still valid CSV)
         w.writerow(["Average Computation Times (ms)"])
         w.writerow(["Folder", folder])
         w.writerow(["NaN handling", "NaN/Inf values skipped per metric"])
         w.writerow([])
 
-        # Column headers (clean, consistent, sortable)
         w.writerow([
             "file_name",
             "rows_seen",
             "avg_total_replan_ms", "n_total_replan",
             "avg_total_whole_ms",  "n_total_whole",
             "avg_total_safe_ms",   "n_total_safe",
-            "safe_success_rate_pct"
         ])
 
-        # Data rows: numeric values stay numeric; missing are blank
         for r in per_file:
             w.writerow([
                 r["file"],
@@ -230,10 +206,8 @@ def main():
                 _csv_num(r["avg_total_replan"]), r["n_total_replan"],
                 _csv_num(r["avg_total_whole"]),  r["n_total_whole"],
                 _csv_num(r["avg_total_safe"]),   r["n_total_safe"],
-                _csv_num(r["safe_rate_pct"], ndigits=2)
             ])
 
-        # Blank line + Overall row
         w.writerow([])
         w.writerow([
             "Overall (weighted by valid samples)",
@@ -241,7 +215,6 @@ def main():
             _csv_num(overall_avgs["total_replan"]), overall_cnts["total_replan"],
             _csv_num(overall_avgs["total_local_whole"]), overall_cnts["total_local_whole"],
             _csv_num(overall_avgs["total_local_safe"]), overall_cnts["total_local_safe"],
-            _csv_num(overall_safe_rate, ndigits=2)
         ])
 
     finally:

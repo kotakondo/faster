@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <vector>
 #include <stdlib.h>
+#include <limits>
 
 using namespace JPS;
 using namespace termcolor;
@@ -423,6 +424,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   //////////////////////////////////////////////////////////////////////////
   ///////////////// Solve with GUROBI Whole trajectory /////////////////////
   //////////////////////////////////////////////////////////////////////////
+  const double NaN = std::numeric_limits<double>::quiet_NaN();
   double gurobi_whole_run_time_ms = 0.0;
   double gurobi_safe_run_time_ms = 0.0;
   double total_opt_whole_run_time_ms = 0.0;
@@ -608,14 +610,14 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   jps_run_time_ms_.push_back(jps_run_time_ms);
   if (solved_whole)
   {
-    gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
-    total_opt_whole_run_time_ms_.push_back(total_opt_whole_run_time_ms);
+    gurobi_whole_run_time_ms_.push_back(solved_whole ? gurobi_whole_run_time_ms : NaN);
+    total_opt_whole_run_time_ms_.push_back(solved_whole ? total_opt_whole_run_time_ms : NaN);
   }
 
   if (solved_safe)
   {
-    gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
-    total_safe_whole_run_time_ms_.push_back(total_safe_whole_run_time_ms);
+    gurobi_safe_run_time_ms_.push_back(solved_safe ? gurobi_safe_run_time_ms : NaN);
+    total_safe_whole_run_time_ms_.push_back(solved_safe ? total_safe_whole_run_time_ms : NaN);
   }
 
   /*  std::cout << "This is the SAFE TRAJECTORY" << std::endl;

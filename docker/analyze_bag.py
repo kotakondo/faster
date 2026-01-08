@@ -119,33 +119,39 @@ def compute_Jsmooth_and_Seff(times, jerk_norms, jerk_x=None, jerk_y=None, jerk_z
 
 def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_constraint=30.0):
     """
-    Reads:
-      /SQ01s/faster/term_goal
-      /SQ01s/goal
+    Travel time definition (MATCHES your Python3 reference):
+      - start_time: first time commanded position moves > tol from initial commanded position (after term_goal)
+      - end_time: first time commanded position is within tol of goal_position
+      - travel_time = end_time - start_time
 
-    Adds violation percentages using 1% slack (same as reference python3):
-      v_thresh = v_constraint * 1.01, etc.
+    Violation percentages:
+      - Uses 1% slack: thresh = constraint * 1.01
+      - Percent = violations / total_cmds_logged * 100
     """
     bag = rosbag.Bag(bag_file)
+
     goal_time = None
     goal_position = None
-    travel_end_time = None
 
+    start_time = None
+    end_time = None
+
+    # We will only log samples AFTER start_time is detected (same as reference).
     pos_cmd_times = []
+    positions = []
     velocities = []
     accelerations = []
     jerks = []
-    positions = []
-
     jerk_x, jerk_y, jerk_z = [], [], []
 
-    # Violation counts + total samples
+    # For start-of-motion detection
+    initial_pos_ref = None
+
     vel_violations = 0
     acc_violations = 0
     jerk_violations = 0
     total_cmds = 0
 
-    # --- same tolerance logic as reference file ---
     perct = 0.01
     v_thresh = v_constraint * (1.0 + perct)
     a_thresh = a_constraint * (1.0 + perct)
@@ -158,59 +164,88 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
             goal_time = t.to_sec()
             goal_position = (msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
             print("  Found /SQ01s/faster/term_goal at time {0:.3f}, goal_position = {1}".format(goal_time, goal_position))
+            continue
 
-        elif topic == "/SQ01s/goal" and goal_time is not None:
-            pos_time = t.to_sec()
-            if pos_time < goal_time:
+        if topic != "/SQ01s/goal":
+            continue
+        if goal_time is None:
+            continue
+
+        pos_time = t.to_sec()
+        if pos_time < goal_time:
+            continue
+
+        pos = (msg.p.x, msg.p.y, msg.p.z)
+
+        # --- Start-of-motion detection (same logic as reference) ---
+        if start_time is None:
+            if initial_pos_ref is None:
+                initial_pos_ref = pos
+                # do NOT log this sample (reference skips stationary period)
                 continue
 
-            total_cmds += 1
+            if compute_distance(pos, initial_pos_ref) <= tol:
+                # still stationary near the initial commanded point
+                continue
 
-            pos_cmd_times.append(pos_time)
-            pos = (msg.p.x, msg.p.y, msg.p.z)
-            positions.append(pos)
+            # Moved > tol => start_time detected
+            start_time = pos_time
+            print("  Start of travel detected at time {0:.3f}".format(start_time))
+            # fallthrough: log this sample as first in the travel segment
 
-            vel = float(np.linalg.norm([msg.v.x, msg.v.y, msg.v.z]))
-            acc = float(np.linalg.norm([msg.a.x, msg.a.y, msg.a.z]))
+        # --- Log samples (only after start_time) ---
+        total_cmds += 1
+        pos_cmd_times.append(pos_time)
+        positions.append(pos)
 
-            jx = float(msg.j.x)
-            jy = float(msg.j.y)
-            jz = float(msg.j.z)
-            jrk = float(np.linalg.norm([jx, jy, jz]))
+        vel = float(np.linalg.norm([msg.v.x, msg.v.y, msg.v.z]))
+        acc = float(np.linalg.norm([msg.a.x, msg.a.y, msg.a.z]))
 
-            velocities.append(vel)
-            accelerations.append(acc)
-            jerks.append(jrk)
-            jerk_x.append(jx); jerk_y.append(jy); jerk_z.append(jz)
+        jx = float(msg.j.x)
+        jy = float(msg.j.y)
+        jz = float(msg.j.z)
+        jrk = float(np.linalg.norm([jx, jy, jz]))
 
-            # --- violations with 1% slack ---
-            if vel > v_thresh:
-                vel_violations += 1
-            if acc > a_thresh:
-                acc_violations += 1
-            if jrk > j_thresh:
-                jerk_violations += 1
+        velocities.append(vel)
+        accelerations.append(acc)
+        jerks.append(jrk)
+        jerk_x.append(jx); jerk_y.append(jy); jerk_z.append(jz)
 
-            if compute_distance(pos, goal_position) <= tol:
-                travel_end_time = pos_time
-                print("  Goal reached at time {0:.3f}".format(travel_end_time))
-                break
+        # violations with 1% slack
+        if vel > v_thresh:
+            vel_violations += 1
+        if acc > a_thresh:
+            acc_violations += 1
+        if jrk > j_thresh:
+            jerk_violations += 1
+
+        # Goal reached?
+        if compute_distance(pos, goal_position) <= tol:
+            end_time = pos_time
+            print("  Goal reached at time {0:.3f}".format(end_time))
+            break
 
     bag.close()
 
-    if goal_time is None or travel_end_time is None:
-        print("  Could not compute travel time for this bag.")
+    if goal_time is None or goal_position is None:
+        print("  Missing /SQ01s/faster/term_goal.")
+        return None
+    if start_time is None or end_time is None:
+        print("  Could not compute travel time (no start or no finish).")
+        return None
+    if end_time <= start_time:
+        print("  Invalid travel interval.")
         return None
 
-    travel_time = float(travel_end_time - goal_time)
+    travel_time = float(end_time - start_time)
 
-    # Path length
+    # Path length on the logged travel segment
     path_length = 0.0
     if len(positions) >= 2:
         for i in range(len(positions) - 1):
             path_length += compute_distance(positions[i], positions[i + 1])
 
-    # Smoothness + RMS jerk/snap (over recorded segment)
+    # Smoothness + RMS jerk/snap on the travel segment
     t_arr = np.asarray(pos_cmd_times, dtype=float)
     j_arr = np.asarray(jerks, dtype=float)
 
@@ -223,7 +258,6 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         jerk_z=np.asarray(jerk_z, dtype=float)
     )
 
-    # Percentages
     if total_cmds > 0:
         v_pct = (float(vel_violations) / float(total_cmds)) * 100.0
         a_pct = (float(acc_violations) / float(total_cmds)) * 100.0
@@ -249,11 +283,6 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         "vel_violate_pct": float(v_pct),
         "acc_violate_pct": float(a_pct),
         "jerk_violate_pct": float(j_pct),
-
-        # Keep thresholds for printing/debugging if useful
-        "v_thresh": float(v_thresh),
-        "a_thresh": float(a_thresh),
-        "j_thresh": float(j_thresh),
     }
 
 
@@ -356,7 +385,7 @@ def main():
     for bag_file in bag_files:
         result = process_bag(bag_file, tol, v_constraint, a_constraint, j_constraint)
         if result is None:
-            stats_lines.append("{0}: Could not compute travel time (missing /goal or goal reached)\n\n".format(
+            stats_lines.append("{0}: Could not compute travel time (no start/finish)\n\n".format(
                 os.path.basename(bag_file)))
             continue
 
@@ -372,7 +401,6 @@ def main():
         overall_jerk_violations += result["jerk_violations"]
         overall_cmds += result["total_cmds"]
 
-        # Per-bag percentages (same as reference file)
         stats_lines.append("{0}:\n".format(os.path.basename(bag_file)))
         stats_lines.append("  Travel time: {0:.3f} s\n".format(result["travel_time"]))
         stats_lines.append("  Path length: {0:.3f} m\n".format(result["path_length"]))
@@ -404,7 +432,6 @@ def main():
         stats_lines.append("  Average J_smooth (RMS jerk): {0:.6f} m/s^3\n".format(avg_J_smooth))
         stats_lines.append("  Average S_eff (RMS snap): {0:.6f} m/s^4\n".format(avg_S_eff))
 
-        # Overall violation percentages (same as reference file)
         if overall_cmds > 0:
             stats_lines.append("  Velocity violations: {0:.2f} %\n".format(
                 (float(overall_vel_violations) / float(overall_cmds)) * 100.0))

@@ -80,7 +80,9 @@ Faster::Faster(parameters par) : par_(par)
   replan_times_.clear();
   jps_run_time_ms_.clear();
   gurobi_whole_run_time_ms_.clear();
+  total_opt_whole_run_time_ms_.clear();
   gurobi_safe_run_time_ms_.clear();
+  total_safe_whole_run_time_ms_.clear();
   simulation_number_ = par_.simulation_number;
 }
 
@@ -115,10 +117,12 @@ void Faster::recordData()
       std::cerr << "Error: Could not open CSV file for writing." << std::endl;
   }
   csvFile << "ComputationTime [ms] for sim number " << simulation_number_ << std::endl;
-  csvFile << "total_replan, jps, gurobi_whole, gurobi_safe" << std::endl;
+  csvFile << "total_replan, jps, gurobi_whole, total_local_whole, gurobi_safe, total_local_safe" << std::endl;
   std::cout << "replan_times_.size()=" << replan_times_.size() << std::endl;
   for (int i = 0; i < replan_times_.size(); i++) {
-      csvFile << replan_times_[i] << ", " << jps_run_time_ms_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << std::endl;
+      csvFile << replan_times_[i] << ", " << jps_run_time_ms_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", "
+              << total_opt_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << ", "
+              << total_safe_whole_run_time_ms_[i] << std::endl;
   }
   csvFile.close();
   std::cout << "done writing computation times to csv file" << std::endl;
@@ -462,6 +466,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       return;
     }
 
+    double total_opt_whole_run_time_ms = whole_gurobi_t.ElapsedMs();
+
     if (solved_whole == false)
     {
       std::cout << bold << red << "No solution found for the whole trajectory" << reset << std::endl;
@@ -581,6 +587,8 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       return;
     }
 
+    double total_safe_whole_run_time_ms = safe_gurobi_t.ElapsedMs();
+
     if (solved_safe == false)
     {
       std::cout << red << "No solution found for the safe path" << reset << std::endl;
@@ -597,7 +605,9 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   replan_times_.push_back(timer_replan.ElapsedMs());
   jps_run_time_ms_.push_back(jps_run_time_ms);
   gurobi_whole_run_time_ms_.push_back(gurobi_whole_run_time_ms);
+  total_opt_whole_run_time_ms_.push_back(total_opt_whole_run_time_ms);
   gurobi_safe_run_time_ms_.push_back(gurobi_safe_run_time_ms);
+  total_safe_whole_run_time_ms_.push_back(total_safe_whole_run_time_ms);
 
   /*  std::cout << "This is the SAFE TRAJECTORY" << std::endl;
     printStateVector(sg_safe_.X_temp_);

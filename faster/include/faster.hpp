@@ -70,7 +70,9 @@ public:
   std::vector<double> replan_times_;
   std::vector<double> jps_run_time_ms_;
   std::vector<double> gurobi_whole_run_time_ms_;
+  std::vector<double> total_opt_whole_run_time_ms_;
   std::vector<double> gurobi_safe_run_time_ms_;
+  std::vector<double> total_safe_whole_run_time_ms_;
   int simulation_number_ = 100;
 
 private:

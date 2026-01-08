@@ -184,7 +184,7 @@ if __name__ == "__main__":
     max_duration = float(sys.argv[2])
     goal_coords = tuple(map(float, sys.argv[3].split(',')))
     threshold = float(sys.argv[4])
-    env_source = "source /home/kota/ws/devel/setup.bash && source /home/kota/mid360_ws/devel/setup.bash && source /opt/ros/melodic/setup.bash"
+    env_source = "source /home/kota/ws/devel/setup.bash && source /home/kota/mid360_ws/devel/setup.bash"
 
     # Optional but useful: verify roscore is up before init_node / subscribing
     # (You said roscore is run outside; this gives a clearer failure mode.)

@@ -47,7 +47,7 @@ Faster::Faster(parameters par) : par_(par)
   // jps_manager_.setVisual(par_.visual);
   jps_manager_.setDroneRadius(par_.drone_radius);
 
-  double max_values[3] = { par_.v_max, par_.a_max, par_.j_max };
+  double max_values[3] = {par_.v_max, par_.a_max, par_.j_max};
 
   // Setup of sg_whole_
   sg_whole_.setN(par_.N_whole);
@@ -87,7 +87,7 @@ Faster::Faster(parameters par) : par_(par)
   simulation_number_ = par_.simulation_number;
 }
 
-void Faster::createMoreVertexes(vec_Vecf<3>& path, double d)
+void Faster::createMoreVertexes(vec_Vecf<3> &path, double d)
 {
   for (int j = 0; j < path.size() - 1; j++)
   {
@@ -109,25 +109,35 @@ void Faster::createMoreVertexes(vec_Vecf<3>& path, double d)
 // record the computation times
 void Faster::recordData()
 {
-  
+
   std::cout << "writing computation times to csv file" << std::endl;
   // Open (or create) a CSV file for writing (append mode)
   std::ofstream csvFile;
   csvFile.open("/home/kota/data/computation_times_num_" + std::to_string(simulation_number_) + ".csv", std::ios::app);
-  if (!csvFile.is_open()) {
-      std::cerr << "Error: Could not open CSV file for writing." << std::endl;
+  if (!csvFile.is_open())
+  {
+    std::cerr << "Error: Could not open CSV file for writing." << std::endl;
   }
   csvFile << "ComputationTime [ms] for sim number " << simulation_number_ << std::endl;
   csvFile << "total_replan, jps, gurobi_whole, total_local_whole, gurobi_safe, total_local_safe" << std::endl;
   std::cout << "replan_times_.size()=" << replan_times_.size() << std::endl;
-  for (int i = 0; i < replan_times_.size(); i++) {
-      csvFile << replan_times_[i] << ", " << jps_run_time_ms_[i] << ", " << gurobi_whole_run_time_ms_[i] << ", "
-              << total_opt_whole_run_time_ms_[i] << ", " << gurobi_safe_run_time_ms_[i] << ", "
-              << total_safe_whole_run_time_ms_[i] << std::endl;
+  const size_t n = replan_times_.size();
+  for (size_t i = 0; i < n; ++i)
+  {
+    auto safe_get = [&](const std::vector<double> &v)
+    {
+      return (i < v.size()) ? v[i] : std::numeric_limits<double>::quiet_NaN();
+    };
+
+    csvFile << replan_times_[i] << ", "
+            << safe_get(jps_run_time_ms_) << ", "
+            << safe_get(gurobi_whole_run_time_ms_) << ", "
+            << safe_get(total_opt_whole_run_time_ms_) << ", "
+            << safe_get(gurobi_safe_run_time_ms_) << ", "
+            << safe_get(total_safe_whole_run_time_ms_) << "\n";
   }
   csvFile.close();
   std::cout << "done writing computation times to csv file" << std::endl;
-
 }
 
 void Faster::updateMap(pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_map, pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_unk)
@@ -139,9 +149,9 @@ void Faster::updateMap(pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_map, pcl::Poin
   pclptr_map_ = pclptr_map;
   pclptr_unk_ = pclptr_unk;
 
-  jps_manager_.updateJPSMap(pclptr_map_, state_.pos);  // Update even where there are no points
+  jps_manager_.updateJPSMap(pclptr_map_, state_.pos); // Update even where there are no points
 
-  if (pclptr_map_->width != 0 && pclptr_map_->height != 0)  // Point Cloud is not empty
+  if (pclptr_map_->width != 0 && pclptr_map_->height != 0) // Point Cloud is not empty
   {
     kdtree_map_.setInputCloud(pclptr_map_);
     kdtree_map_initialized_ = 1;
@@ -161,16 +171,16 @@ void Faster::updateMap(pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_map, pcl::Poin
   {
     kdtree_unk_.setInputCloud(pclptr_unk_);
     kdtree_unk_initialized_ = 1;
-    jps_manager_.vec_uo_ = pclptr_to_vec(pclptr_unk_);  // insert unknown space
+    jps_manager_.vec_uo_ = pclptr_to_vec(pclptr_unk_); // insert unknown space
     jps_manager_.vec_uo_.insert(jps_manager_.vec_uo_.end(), jps_manager_.vec_o_.begin(),
-                                jps_manager_.vec_o_.end());  // append known space
+                                jps_manager_.vec_o_.end()); // append known space
   }
 
   mtx_map.unlock();
   mtx_unk.unlock();
 }
 
-void Faster::setTerminalGoal(state& term_goal)
+void Faster::setTerminalGoal(state &term_goal)
 {
   mtx_G_term.lock();
   mtx_G.lock();
@@ -182,7 +192,7 @@ void Faster::setTerminalGoal(state& term_goal)
   G_.pos = projectPointToBox(temp, G_term_.pos, par_.wdx, par_.wdy, par_.wdz);
   if (drone_status_ == DroneStatus::GOAL_REACHED)
   {
-    changeDroneStatus(DroneStatus::YAWING);  // not done when drone_status==traveling
+    changeDroneStatus(DroneStatus::YAWING); // not done when drone_status==traveling
   }
   terminal_goal_initialized_ = true;
 
@@ -192,12 +202,12 @@ void Faster::setTerminalGoal(state& term_goal)
   mtx_planner_status_.unlock();
 }
 
-void Faster::getG(state& G)
+void Faster::getG(state &G)
 {
   G = G_;
 }
 
-void Faster::getState(state& data)
+void Faster::getState(state &data)
 {
   mtx_state.lock();
   data = state_;
@@ -212,10 +222,10 @@ int Faster::findIndexR(int indexH)
   posHk << sg_whole_.X_temp_[indexH].pos(0), sg_whole_.X_temp_[indexH].pos(1);
   int indexR = indexH;
 
-  for (int i = 0; i <= indexH; i = i + 1)  // Loop from A to H
+  for (int i = 0; i <= indexH; i = i + 1) // Loop from A to H
   {
     Eigen::Vector2d vel;
-    vel << sg_whole_.X_temp_[i].vel(0), sg_whole_.X_temp_[i].vel(1);  //(i, 3), sg_whole_.X_temp_(i, 4);
+    vel << sg_whole_.X_temp_[i].vel(0), sg_whole_.X_temp_[i].vel(1); //(i, 3), sg_whole_.X_temp_(i, 4);
 
     Eigen::Vector2d pos;
     pos << sg_whole_.X_temp_[i].pos(0), sg_whole_.X_temp_[i].pos(1);
@@ -227,9 +237,9 @@ int Faster::findIndexR(int indexH)
     // std::cout << "(posHk - pos).cwiseAbs().array())=" << (posHk - pos).cwiseAbs().array().transpose() << std::endl;
 
     bool thereWillBeCollision =
-        (braking_distance.array() > (posHk - pos).cwiseAbs().array()).any();  // Any of the braking distances (in x, y,
-                                                                              // z) is bigger than the distance to the
-                                                                              // obstacle in that direction
+        (braking_distance.array() > (posHk - pos).cwiseAbs().array()).any(); // Any of the braking distances (in x, y,
+                                                                             // z) is bigger than the distance to the
+                                                                             // obstacle in that direction
     if (thereWillBeCollision)
     {
       indexR = i;
@@ -249,9 +259,9 @@ int Faster::findIndexR(int indexH)
   return indexR;
 }
 
-int Faster::findIndexH(bool& needToComputeSafePath)
+int Faster::findIndexH(bool &needToComputeSafePath)
 {
-  int n = 1;  // find one neighbour
+  int n = 1; // find one neighbour
   std::vector<int> pointIdxNKNSearch(n);
   std::vector<float> pointNKNSquaredDistance(n);
 
@@ -262,7 +272,7 @@ int Faster::findIndexH(bool& needToComputeSafePath)
   int indexH = sg_whole_.X_temp_.size() - 1;
 
   for (int i = 0; i < sg_whole_.X_temp_.size(); i = i + 10)
-  {  // Sample points along the trajectory
+  { // Sample points along the trajectory
 
     Eigen::Vector3d tmp = sg_whole_.X_temp_[i].pos;
     pcl::PointXYZ searchPoint(tmp(0), tmp(1), tmp(2));
@@ -271,7 +281,7 @@ int Faster::findIndexH(bool& needToComputeSafePath)
     {
       if (sqrt(pointNKNSquaredDistance[0]) < par_.drone_radius)
       {
-        needToComputeSafePath = true;  // There is intersection, so there is need to compute safe path
+        needToComputeSafePath = true; // There is intersection, so there is need to compute safe path
         indexH = (int)(par_.delta_H * i);
         break;
       }
@@ -327,9 +337,9 @@ bool Faster::initialized()
   return true;
 }
 
-void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E<Polyhedron<3>>& poly_safe_out,
-                    vec_E<Polyhedron<3>>& poly_whole_out, std::vector<state>& X_safe_out,
-                    std::vector<state>& X_whole_out)
+void Faster::replan(vec_Vecf<3> &JPS_safe_out, vec_Vecf<3> &JPS_whole_out, vec_E<Polyhedron<3>> &poly_safe_out,
+                    vec_E<Polyhedron<3>> &poly_whole_out, std::vector<state> &X_safe_out,
+                    std::vector<state> &X_whole_out)
 {
   MyTimer replanCB_t(true);
   if (initializedAllExceptPlanner() == false)
@@ -351,7 +361,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   state state_local = state_;
   state G;
   G.pos = projectPointToBox(state_local.pos, G_term_.pos, par_.wdx, par_.wdy, par_.wdz);
-  state G_term = G_term_;  // Local copy of the terminal terminal goal
+  state G_term = G_term_; // Local copy of the terminal terminal goal
 
   mtx_G.unlock();
   mtx_G_term.unlock();
@@ -408,9 +418,9 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   ///////////////////////// Find JPS_in ////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////
 
-  double ra = std::min((dist_to_goal - 0.001), par_.Ra);  // radius of the sphere S
+  double ra = std::min((dist_to_goal - 0.001), par_.Ra); // radius of the sphere S
   bool noPointsOutsideS;
-  int li1;  // last index inside the sphere of JPSk
+  int li1; // last index inside the sphere of JPSk
   state E;
   E.pos = getFirstIntersectionWithSphere(JPSk, ra, JPSk[0], &li1, &noPointsOutsideS);
   vec_Vecf<3> JPS_in(JPSk.begin(), JPSk.begin() + li1 + 1);
@@ -465,7 +475,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     {
       solved_whole = sg_whole_.genNewTraj(gurobi_whole_run_time_ms);
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
       std::cout << bold << red << "Exception caught in genNewTraj for whole trajectory" << reset << std::endl;
       return;
@@ -487,7 +497,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     JPS_whole_out = JPS_whole;
   }
   else
-  {  // Dummy whole trajectory
+  { // Dummy whole trajectory
     state dummy;
     std::vector<state> dummy_vector;
     dummy_vector.push_back(dummy);
@@ -506,7 +516,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   bool thereIsIntersection2;
   // state M;
   M_.pos = getFirstCollisionJPS(JPSk_inside_sphere_tmp, &thereIsIntersection2, UNKNOWN_MAP,
-                                RETURN_INTERSECTION);  // results saved in JPSk_inside_sphere_tmp
+                                RETURN_INTERSECTION); // results saved in JPSk_inside_sphere_tmp
 
   bool needToComputeSafePath;
   int indexH = findIndexH(needToComputeSafePath);
@@ -521,7 +531,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   if (needToComputeSafePath == false)
   {
     k_safe = indexH;
-    sg_safe_.X_temp_ = std::vector<state>();  // 0 elements
+    sg_safe_.X_temp_ = std::vector<state>(); // 0 elements
   }
   else
   {
@@ -575,7 +585,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     }
 
     sg_safe_.setX0(x0_safe);
-    sg_safe_.setXf(M_);  // only used to compute dt
+    sg_safe_.setXf(M_); // only used to compute dt
     sg_safe_.setPolytopes(l_constraints_safe_);
     sg_safe_.setForceFinalConstraint(shouldForceFinalConstraint_for_Safe);
     MyTimer safe_gurobi_t(true);
@@ -585,7 +595,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
     {
       solved_safe = sg_safe_.genNewTraj(gurobi_safe_run_time_ms);
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
       std::cout << bold << red << "Exception caught in genNewTraj for safe trajectory" << reset << std::endl;
       return;
@@ -598,7 +608,6 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
       std::cout << red << "No solution found for the safe path" << reset << std::endl;
       return;
     }
-
 
     // Get the solution
     sg_safe_.fillX();
@@ -644,7 +653,7 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   //////////////////////////////////////////////////////////
 
   // Check if we have planned until G_term
-  state F = plan_.back();  // Final point of the safe path (\equiv final point of the comitted path)
+  state F = plan_.back(); // Final point of the safe path (\equiv final point of the comitted path)
 
   // F.print();
   double dist = (G_term_.pos - F.pos).norm();
@@ -656,9 +665,9 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
 
   mtx_offsets.lock();
 
-  int states_last_replan = ceil(replanCB_t.ElapsedMs() / (par_.dc * 1000));  // Number of states that
-                                                                             // would have been needed for
-                                                                             // the last replan
+  int states_last_replan = ceil(replanCB_t.ElapsedMs() / (par_.dc * 1000)); // Number of states that
+                                                                            // would have been needed for
+                                                                            // the last replan
   mtx_offsets.unlock();
 
   // Time allocation
@@ -677,17 +686,16 @@ void Faster::replan(vec_Vecf<3>& JPS_safe_out, vec_Vecf<3>& JPS_whole_out, vec_E
   return;
 }
 
-void Faster::getComputationTimeVectors(std::vector<double>& replan_times, 
-                                       std::vector<double>& jps_run_time_ms,
-                                       std::vector<double>& gurobi_whole_run_time_ms,
-                                       std::vector<double>& gurobi_safe_run_time_ms)
+void Faster::getComputationTimeVectors(std::vector<double> &replan_times,
+                                       std::vector<double> &jps_run_time_ms,
+                                       std::vector<double> &gurobi_whole_run_time_ms,
+                                       std::vector<double> &gurobi_safe_run_time_ms)
 {
   replan_times = replan_times_;
   jps_run_time_ms = jps_run_time_ms_;
   gurobi_whole_run_time_ms = gurobi_whole_run_time_ms_;
   gurobi_safe_run_time_ms = gurobi_safe_run_time_ms_;
 }
-
 
 void Faster::resetInitialization()
 {
@@ -698,7 +706,7 @@ void Faster::resetInitialization()
   terminal_goal_initialized_ = false;
 }
 
-bool Faster::appendToPlan(int k_end_whole, const std::vector<state>& whole, int k_safe, const std::vector<state>& safe)
+bool Faster::appendToPlan(int k_end_whole, const std::vector<state> &whole, int k_safe, const std::vector<state> &safe)
 {
   mtx_plan_.lock();
 
@@ -742,7 +750,7 @@ bool Faster::appendToPlan(int k_end_whole, const std::vector<state>& whole, int 
   return output;
 }
 
-void Faster::yaw(double diff, state& next_goal)
+void Faster::yaw(double diff, state &next_goal)
 {
   saturate(diff, -par_.dc * par_.w_max, par_.dc * par_.w_max);
   double dyaw_not_filtered;
@@ -758,28 +766,28 @@ void Faster::yaw(double diff, state& next_goal)
   // std::cout << "After next_goal.yaw=" << next_goal.yaw << std::endl;
 }
 
-void Faster::getDesiredYaw(state& next_goal)
+void Faster::getDesiredYaw(state &next_goal)
 {
   double diff = 0.0;
   double desired_yaw = 0.0;
 
   switch (drone_status_)
   {
-    case DroneStatus::YAWING:
-      desired_yaw = atan2(G_term_.pos[1] - next_goal.pos[1], G_term_.pos[0] - next_goal.pos[0]);
-      diff = desired_yaw - state_.yaw;
-      // std::cout << "diff1= " << diff << std::endl;
-      break;
-    case DroneStatus::TRAVELING:
-    case DroneStatus::GOAL_SEEN:
-      desired_yaw = atan2(next_goal.pos[1] - state_.pos.y(), next_goal.pos[0] - state_.pos.x());
-      next_goal.yaw = desired_yaw;
-      return;
-      break;
-    case DroneStatus::GOAL_REACHED:
-      next_goal.dyaw = 0.0;
-      next_goal.yaw = previous_yaw_;
-      return;
+  case DroneStatus::YAWING:
+    desired_yaw = atan2(G_term_.pos[1] - next_goal.pos[1], G_term_.pos[0] - next_goal.pos[0]);
+    diff = desired_yaw - state_.yaw;
+    // std::cout << "diff1= " << diff << std::endl;
+    break;
+  case DroneStatus::TRAVELING:
+  case DroneStatus::GOAL_SEEN:
+    desired_yaw = atan2(next_goal.pos[1] - state_.pos.y(), next_goal.pos[0] - state_.pos.x());
+    next_goal.yaw = desired_yaw;
+    return;
+    break;
+  case DroneStatus::GOAL_REACHED:
+    next_goal.dyaw = 0.0;
+    next_goal.yaw = previous_yaw_;
+    return;
   }
 
   angle_wrap(diff);
@@ -792,7 +800,7 @@ void Faster::getDesiredYaw(state& next_goal)
   // std::cout << "yaw3= " << next_goal.yaw << std::endl;
 }
 
-bool Faster::getNextGoal(state& next_goal)
+bool Faster::getNextGoal(state &next_goal)
 {
   if (initializedAllExceptPlanner() == false)
   {
@@ -819,10 +827,10 @@ bool Faster::getNextGoal(state& next_goal)
 }
 
 bool Faster::ARisInFreeSpace(int index)
-{  // We have to check only against the unkown space (A-R won't intersect the obstacles for sure)
+{ // We have to check only against the unkown space (A-R won't intersect the obstacles for sure)
 
   // std::cout << "In ARisInFreeSpace, radius_drone= " << par_.drone_radius << std::endl;
-  int n = 1;  // find one neighbour
+  int n = 1; // find one neighbour
 
   std::vector<int> pointIdxNKNSearch(n);
   std::vector<float> pointNKNSquaredDistance(n);
@@ -834,15 +842,15 @@ bool Faster::ARisInFreeSpace(int index)
   mtx_X_U_temp.lock();
   // std::cout << "After mtx_unk. index=" << index << std::endl;
   for (int i = 0; i < index; i = i + 10)
-  {  // Sample points along the trajectory
-     // std::cout << "i=" << i << std::endl;
+  { // Sample points along the trajectory
+    // std::cout << "i=" << i << std::endl;
     Eigen::Vector3d tmp = sg_whole_.X_temp_[i].pos;
     pcl::PointXYZ searchPoint(tmp(0), tmp(1), tmp(2));
 
     if (kdtree_unk_.nearestKSearch(searchPoint, n, pointIdxNKNSearch, pointNKNSquaredDistance) > 0)
     {
       if (sqrt(pointNKNSquaredDistance[0]) < 0.2)
-      {  // TODO: 0.2 is the radius of the drone.
+      { // TODO: 0.2 is the radius of the drone.
         std::cout << "A->R collides, with d=" << sqrt(pointNKNSquaredDistance[0])
                   << ", radius_drone=" << par_.drone_radius << std::endl;
         isFree = false;
@@ -860,7 +868,7 @@ bool Faster::ARisInFreeSpace(int index)
 // Returns the first collision of JPS with the map (i.e. with the known obstacles). Note that JPS will collide with a
 // map B if JPS was computed using an older map A
 // If type_return==Intersection, it returns the last point in the JPS path that is at least par_.inflation_jps from map
-Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsIntersection, int map, int type_return)
+Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3> &path, bool *thereIsIntersection, int map, int type_return)
 {
   vec_Vecf<3> original = path;
 
@@ -874,7 +882,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
   // occupied (map)
   int n = 1;
   std::vector<int> id_map(n);
-  std::vector<float> dist2_map(n);  // squared distance
+  std::vector<float> dist2_map(n); // squared distance
   double r = 1000000;
   // printElementsOfJPS(path);
   // printf("In 2\n");
@@ -883,7 +891,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
   mtx_unk.lock();
 
   // Find the next eig_search_point
-  int last_id = -1;  // this is the last index inside the sphere
+  int last_id = -1; // this is the last index inside the sphere
   int iteration = 0;
   while (path.size() > 0)
   {
@@ -897,7 +905,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
     {
       number_of_neigh = kdtree_map_.nearestKSearch(pcl_search_point, n, id_map, dist2_map);
     }
-    else  // map == UNKNOWN_MAP
+    else // map == UNKNOWN_MAP
     {
       number_of_neigh = kdtree_unk_.nearestKSearch(pcl_search_point, n, id_map, dist2_map);
       // std::cout << "In unknown_map, number of neig=" << number_of_neigh << std::endl;
@@ -911,7 +919,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
       // std::cout << "r=" << r << std::endl;
       // std::cout << "Point=" << r << std::endl;
 
-      if (r < par_.drone_radius)  // collision of the JPS path and an inflated obstacle --> take last search point
+      if (r < par_.drone_radius) // collision of the JPS path and an inflated obstacle --> take last search point
       {
         // std::cout << "Collision detected" << std::endl;  // We will return the search_point
         // pubJPSIntersection(inters);
@@ -922,52 +930,52 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
         }
         switch (type_return)
         {
-          case RETURN_LAST_VERTEX:
-            result = last_search_point;
-            break;
-          case RETURN_INTERSECTION:
-            if (iteration == 0)
-            {  // Hacking (TODO)
-              Eigen::Vector3d tmp;
-              tmp << original[0](0) + 0.01, original[0](1), original[0](2);
-              path.clear();
-              path.push_back(original[0]);
-              path.push_back(tmp);
-              result = path[path.size() - 1];
-              // result=original[original.size() - 1];
-            }
-            else
-            {
-              // std::cout << "In Return Intersection, last_id=" << last_id<<el_eliminated<< std::endl;
-              int vertexes_eliminated_tmp = original.size() - path.size() + 1;
-              // std::cout << "In Return Intersection, vertexes_eliminated_tmp=" << vertexes_eliminated_tmp <<
-              // std::endl;
-              original.erase(original.begin() + vertexes_eliminated_tmp,
-                             original.end());  // Now original contains all the elements eliminated
-              original.push_back(path[0]);
+        case RETURN_LAST_VERTEX:
+          result = last_search_point;
+          break;
+        case RETURN_INTERSECTION:
+          if (iteration == 0)
+          { // Hacking (TODO)
+            Eigen::Vector3d tmp;
+            tmp << original[0](0) + 0.01, original[0](1), original[0](2);
+            path.clear();
+            path.push_back(original[0]);
+            path.push_back(tmp);
+            result = path[path.size() - 1];
+            // result=original[original.size() - 1];
+          }
+          else
+          {
+            // std::cout << "In Return Intersection, last_id=" << last_id<<el_eliminated<< std::endl;
+            int vertexes_eliminated_tmp = original.size() - path.size() + 1;
+            // std::cout << "In Return Intersection, vertexes_eliminated_tmp=" << vertexes_eliminated_tmp <<
+            // std::endl;
+            original.erase(original.begin() + vertexes_eliminated_tmp,
+                           original.end()); // Now original contains all the elements eliminated
+            original.push_back(path[0]);
 
-              /*              std::cout << "Result before reduceJPSbyDistance" << original[original.size() -
-                 1].transpose()
-                                      << std::endl;*/
+            /*              std::cout << "Result before reduceJPSbyDistance" << original[original.size() -
+               1].transpose()
+                                    << std::endl;*/
 
-              // This is to force the intersection point to be at least par_.drone_radius away from the obstacles
-              reduceJPSbyDistance(original, par_.drone_radius);
+            // This is to force the intersection point to be at least par_.drone_radius away from the obstacles
+            reduceJPSbyDistance(original, par_.drone_radius);
 
-              result = original[original.size() - 1];
+            result = original[original.size() - 1];
 
-              // std::cout<<"Result here is"<<result.transpose()<<std::endl;
+            // std::cout<<"Result here is"<<result.transpose()<<std::endl;
 
-              path = original;
-            }
-            // Copy the resulting path to the reference
-            /*     std::reverse(original.begin(), original.end());  // flip all the vector
-               result = getFirstIntersectionWithSphere(original, par_.inflation_jps, original[0]);*/
-            break;
+            path = original;
+          }
+          // Copy the resulting path to the reference
+          /*     std::reverse(original.begin(), original.end());  // flip all the vector
+             result = getFirstIntersectionWithSphere(original, par_.inflation_jps, original[0]);*/
+          break;
         }
 
         *thereIsIntersection = true;
 
-        break;  // Leave the while loop
+        break; // Leave the while loop
       }
 
       bool no_points_outside_sphere = false;
@@ -975,7 +983,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
       inters = getFirstIntersectionWithSphere(path, r, path[0], &last_id, &no_points_outside_sphere);
       // printf("**********Found it*****************\n");
       if (no_points_outside_sphere == true)
-      {  // JPS doesn't intersect with any obstacle
+      { // JPS doesn't intersect with any obstacle
         *thereIsIntersection = false;
         /*        std::cout << "JPS provided doesn't intersect any obstacles, returning the first element of the path
            you gave " "me\n"
@@ -988,7 +996,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
           path = original;
         }
 
-        break;  // Leave the while loop
+        break; // Leave the while loop
       }
       // printf("In 4\n");
 
@@ -1000,7 +1008,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3>& path, bool* thereIsInt
       path.insert(path.begin(), inters);
     }
     else
-    {  // There is no neighbours
+    { // There is no neighbours
       *thereIsIntersection = false;
       ROS_INFO("JPS provided doesn't intersect any obstacles, returning the first element of the path you gave me\n");
       result = first_element;
@@ -1032,35 +1040,35 @@ void Faster::changeDroneStatus(int new_status)
   std::cout << "Changing DroneStatus from ";
   switch (drone_status_)
   {
-    case DroneStatus::YAWING:
-      std::cout << bold << "status_=YAWING" << reset;
-      break;
-    case DroneStatus::TRAVELING:
-      std::cout << bold << "status_=TRAVELING" << reset;
-      break;
-    case DroneStatus::GOAL_SEEN:
-      std::cout << bold << "status_=GOAL_SEEN" << reset;
-      break;
-    case DroneStatus::GOAL_REACHED:
-      std::cout << bold << "status_=GOAL_REACHED" << reset;
-      break;
+  case DroneStatus::YAWING:
+    std::cout << bold << "status_=YAWING" << reset;
+    break;
+  case DroneStatus::TRAVELING:
+    std::cout << bold << "status_=TRAVELING" << reset;
+    break;
+  case DroneStatus::GOAL_SEEN:
+    std::cout << bold << "status_=GOAL_SEEN" << reset;
+    break;
+  case DroneStatus::GOAL_REACHED:
+    std::cout << bold << "status_=GOAL_REACHED" << reset;
+    break;
   }
   std::cout << " to ";
 
   switch (new_status)
   {
-    case DroneStatus::YAWING:
-      std::cout << bold << "status_=YAWING" << reset;
-      break;
-    case DroneStatus::TRAVELING:
-      std::cout << bold << "status_=TRAVELING" << reset;
-      break;
-    case DroneStatus::GOAL_SEEN:
-      std::cout << bold << "status_=GOAL_SEEN" << reset;
-      break;
-    case DroneStatus::GOAL_REACHED:
-      std::cout << bold << "status_=GOAL_REACHED" << reset;
-      break;
+  case DroneStatus::YAWING:
+    std::cout << bold << "status_=YAWING" << reset;
+    break;
+  case DroneStatus::TRAVELING:
+    std::cout << bold << "status_=TRAVELING" << reset;
+    break;
+  case DroneStatus::GOAL_SEEN:
+    std::cout << bold << "status_=GOAL_SEEN" << reset;
+    break;
+  case DroneStatus::GOAL_REACHED:
+    std::cout << bold << "status_=GOAL_REACHED" << reset;
+    break;
   }
 
   std::cout << std::endl;
@@ -1072,17 +1080,17 @@ void Faster::print_status()
 {
   switch (drone_status_)
   {
-    case DroneStatus::YAWING:
-      std::cout << bold << "status_=YAWING" << reset << std::endl;
-      break;
-    case DroneStatus::TRAVELING:
-      std::cout << bold << "status_=TRAVELING" << reset << std::endl;
-      break;
-    case DroneStatus::GOAL_SEEN:
-      std::cout << bold << "status_=GOAL_SEEN" << reset << std::endl;
-      break;
-    case DroneStatus::GOAL_REACHED:
-      std::cout << bold << "status_=GOAL_REACHED" << reset << std::endl;
-      break;
+  case DroneStatus::YAWING:
+    std::cout << bold << "status_=YAWING" << reset << std::endl;
+    break;
+  case DroneStatus::TRAVELING:
+    std::cout << bold << "status_=TRAVELING" << reset << std::endl;
+    break;
+  case DroneStatus::GOAL_SEEN:
+    std::cout << bold << "status_=GOAL_SEEN" << reset << std::endl;
+    break;
+  case DroneStatus::GOAL_REACHED:
+    std::cout << bold << "status_=GOAL_REACHED" << reset << std::endl;
+    break;
   }
 }

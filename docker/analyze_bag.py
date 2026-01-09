@@ -165,11 +165,12 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
 
         pos = (msg.p.x, msg.p.y, msg.p.z)
 
+        start_tol = 0.05
         if start_time is None:
             if initial_pos_ref is None:
                 initial_pos_ref = pos
                 continue
-            if compute_distance(pos, initial_pos_ref) <= tol:
+            if compute_distance(pos, initial_pos_ref) <= start_tol:
                 continue
             start_time = pos_time
             print("  Start of travel detected at time {0:.3f}".format(start_time))

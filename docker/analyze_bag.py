@@ -5,6 +5,7 @@ import os
 import sys
 import glob
 import re
+import csv  # <-- NEW
 
 try:
     import gnupg
@@ -127,12 +128,9 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
     pos_cmd_times = []
     positions = []
 
-    # Per-axis logs (for plotting + axis-constraint checking)
     vx_list, vy_list, vz_list = [], [], []
     ax_list, ay_list, az_list = [], [], []
     jx_list, jy_list, jz_list = [], [], []
-
-    # Norm logs (optional; keep for smoothness metrics convenience)
     jerk_norms = []
 
     initial_pos_ref = None
@@ -190,7 +188,6 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         jnorm = float(np.linalg.norm([jx, jy, jz]))
         jerk_norms.append(jnorm)
 
-        # PER-AXIS violations (any axis exceeds)
         if (abs(vx) > v_thresh) or (abs(vy) > v_thresh) or (abs(vz) > v_thresh):
             vel_violations += 1
         if (abs(ax) > a_thresh) or (abs(ay) > a_thresh) or (abs(az) > a_thresh):
@@ -246,7 +243,6 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         "path_length": float(path_length),
         "pos_cmd_times": t_arr,
 
-        # per-axis arrays
         "vx": np.asarray(vx_list, dtype=float),
         "vy": np.asarray(vy_list, dtype=float),
         "vz": np.asarray(vz_list, dtype=float),
@@ -257,14 +253,12 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         "jy": np.asarray(jy_list, dtype=float),
         "jz": np.asarray(jz_list, dtype=float),
 
-        # smoothness / snap
         "jerk_norms": j_arr,
         "snaps": metrics["snaps"],
         "smoothness_l1": float(smoothness_l1),
         "J_smooth": float(metrics["J_smooth"]),
         "S_eff": float(metrics["S_eff"]),
 
-        # violations
         "vel_violations": int(vel_violations),
         "acc_violations": int(acc_violations),
         "jerk_violations": int(jerk_violations),
@@ -279,7 +273,6 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     base_name = os.path.splitext(os.path.basename(bag_file))[0]
     folder = os.path.dirname(bag_file)
 
-    # Histogram of per-axis magnitudes for velocity
     plt.figure()
     plt.hist(np.abs(results["vx"]), bins=20, alpha=0.6, label="|vx|")
     plt.hist(np.abs(results["vy"]), bins=20, alpha=0.6, label="|vy|")
@@ -306,7 +299,6 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     rows = 4 if use_snap else 3
     plt.figure(figsize=(12, 12 if use_snap else 10))
 
-    # Velocity per-axis
     plt.subplot(rows, 1, 1)
     plt.plot(t, vx, label="vx")
     plt.plot(t, vy, label="vy")
@@ -317,7 +309,6 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     plt.legend()
     plt.grid(True)
 
-    # Acceleration per-axis
     plt.subplot(rows, 1, 2)
     plt.plot(t, ax, label="ax")
     plt.plot(t, ay, label="ay")
@@ -328,7 +319,6 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     plt.legend()
     plt.grid(True)
 
-    # Jerk per-axis
     plt.subplot(rows, 1, 3)
     plt.plot(t, jx, label="jx")
     plt.plot(t, jy, label="jy")
@@ -355,6 +345,14 @@ def save_plots(bag_file, results, v_constraint, a_constraint, j_constraint, show
     plt.close()
 
 
+def _stats(arr):
+    """Return (mean, std, min, max) for a list; zeros if empty."""
+    if not arr:
+        return (0.0, 0.0, 0.0, 0.0)
+    x = np.asarray(arr, dtype=float)
+    return (float(np.mean(x)), float(np.std(x)), float(np.min(x)), float(np.max(x)))
+
+
 def main():
     if len(sys.argv) < 6:
         print("Usage: {0} <bag_folder> <tolerance (m)> <v_max_axis> <a_max_axis> <j_max_axis>".format(sys.argv[0]))
@@ -374,6 +372,22 @@ def main():
     bag_files = sorted(bag_files, key=lambda f: extract_number(os.path.basename(f)))
 
     processed_count = 0
+
+    # ---- NEW: overall accumulators ----
+    travel_times = []
+    path_lengths = []
+    smoothness_l1s = []
+    J_smooths = []
+    S_effs = []
+
+    total_vel_viol = 0
+    total_acc_viol = 0
+    total_jerk_viol = 0
+    total_cmds_all = 0
+
+    # ---- NEW: per-bag CSV rows ----
+    per_bag_rows = []
+
     stats_lines = []
     stats_lines.append("Bag File Statistics:\n\n")
     stats_lines.append("Note: constraint violations are PER-AXIS with 1% slack.\n\n")
@@ -387,6 +401,33 @@ def main():
 
         processed_count += 1
 
+        # ---- NEW: update overall accumulators ----
+        travel_times.append(result["travel_time"])
+        path_lengths.append(result["path_length"])
+        smoothness_l1s.append(result["smoothness_l1"])
+        J_smooths.append(result["J_smooth"])
+        S_effs.append(result["S_eff"])
+
+        total_vel_viol += result["vel_violations"]
+        total_acc_viol += result["acc_violations"]
+        total_jerk_viol += result["jerk_violations"]
+        total_cmds_all += result["total_cmds"]
+
+        # ---- NEW: store per-bag row for CSV ----
+        per_bag_rows.append([
+            os.path.basename(bag_file),
+            float(result["travel_time"]),
+            float(result["path_length"]),
+            float(result["smoothness_l1"]),
+            float(result["J_smooth"]),
+            float(result["S_eff"]),
+            int(result["total_cmds"]),
+            int(result["vel_violations"]), float(result["vel_violate_pct"]),
+            int(result["acc_violations"]), float(result["acc_violate_pct"]),
+            int(result["jerk_violations"]), float(result["jerk_violate_pct"]),
+        ])
+
+        # Existing per-bag text
         stats_lines.append("{0}:\n".format(os.path.basename(bag_file)))
         stats_lines.append("  Travel time: {0:.3f} s\n".format(result["travel_time"]))
         stats_lines.append("  Path length: {0:.3f} m\n".format(result["path_length"]))
@@ -402,14 +443,117 @@ def main():
 
         save_plots(bag_file, result, v_constraint, a_constraint, j_constraint, show_snap=True)
 
+    # -------------------- NEW: overall statistics block --------------------
+    stats_lines.append("\nOverall Statistics (across all valid bags):\n")
+    stats_lines.append("  Processed bag files: {0}\n".format(processed_count))
+
+    tt_mu, tt_sd, tt_min, tt_max = _stats(travel_times)
+    pl_mu, pl_sd, pl_min, pl_max = _stats(path_lengths)
+    sm_mu, sm_sd, sm_min, sm_max = _stats(smoothness_l1s)
+    js_mu, js_sd, js_min, js_max = _stats(J_smooths)
+    se_mu, se_sd, se_min, se_max = _stats(S_effs)
+
+    stats_lines.append("  Travel time [s]: mean={0:.3f}, std={1:.3f}, min={2:.3f}, max={3:.3f}\n".format(
+        tt_mu, tt_sd, tt_min, tt_max))
+    stats_lines.append("  Path length [m]: mean={0:.3f}, std={1:.3f}, min={2:.3f}, max={3:.3f}\n".format(
+        pl_mu, pl_sd, pl_min, pl_max))
+    stats_lines.append("  Smoothness (∫||jerk|| dt) [m/s^2]: mean={0:.6f}, std={1:.6f}, min={2:.6f}, max={3:.6f}\n".format(
+        sm_mu, sm_sd, sm_min, sm_max))
+    stats_lines.append("  J_smooth (RMS jerk) [m/s^3]: mean={0:.6f}, std={1:.6f}, min={2:.6f}, max={3:.6f}\n".format(
+        js_mu, js_sd, js_min, js_max))
+    stats_lines.append("  S_eff (RMS snap) [m/s^4]: mean={0:.6f}, std={1:.6f}, min={2:.6f}, max={3:.6f}\n".format(
+        se_mu, se_sd, se_min, se_max))
+
+    if total_cmds_all > 0:
+        v_all_pct = 100.0 * float(total_vel_viol) / float(total_cmds_all)
+        a_all_pct = 100.0 * float(total_acc_viol) / float(total_cmds_all)
+        j_all_pct = 100.0 * float(total_jerk_viol) / float(total_cmds_all)
+    else:
+        v_all_pct = a_all_pct = j_all_pct = 0.0
+
+    stats_lines.append("  Total commands: {0}\n".format(total_cmds_all))
+    stats_lines.append("  Velocity violations (overall): {0} ({1:.2f}%)\n".format(total_vel_viol, v_all_pct))
+    stats_lines.append("  Acceleration violations (overall): {0} ({1:.2f}%)\n".format(total_acc_viol, a_all_pct))
+    stats_lines.append("  Jerk violations (overall): {0} ({1:.2f}%)\n".format(total_jerk_viol, j_all_pct))
+
+    # Print overall summary to console too
+    print("\n=== Overall Statistics (across all valid bags) ===")
+    print("Processed bag files: {0}".format(processed_count))
+    print("Travel time [s]: mean={0:.3f}, std={1:.3f}, min={2:.3f}, max={3:.3f}".format(tt_mu, tt_sd, tt_min, tt_max))
+    print("Path length [m]: mean={0:.3f}, std={1:.3f}, min={2:.3f}, max={3:.3f}".format(pl_mu, pl_sd, pl_min, pl_max))
+    print("Smoothness (∫||jerk|| dt) [m/s^2]: mean={0:.6f}".format(sm_mu))
+    print("J_smooth (RMS jerk) [m/s^3]: mean={0:.6f}".format(js_mu))
+    print("S_eff (RMS snap) [m/s^4]: mean={0:.6f}".format(se_mu))
+    print("Total commands: {0}".format(total_cmds_all))
+    print("Velocity violations: {0:.2f} %".format(v_all_pct))
+    print("Acceleration violations: {0:.2f} %".format(a_all_pct))
+    print("Jerk violations: {0:.2f} %".format(j_all_pct))
+
+    # -------------------- Save TXT (existing) --------------------
     stats_file = os.path.join(bag_folder, "faster_statistics.txt")
     f = open(stats_file, "w")
     try:
         f.writelines(stats_lines)
     finally:
         f.close()
+    print("Saved text statistics to: {0}".format(stats_file))
 
-    print("Saved overall statistics to: {0}".format(stats_file))
+    # -------------------- NEW: Save CSVs --------------------
+    per_bag_csv = os.path.join(bag_folder, "faster_per_bag_summary.csv")
+    overall_csv = os.path.join(bag_folder, "faster_overall_summary.csv")
+
+    # Per-bag CSV
+    with open(per_bag_csv, "wb") as cf:
+        w = csv.writer(cf)
+        w.writerow([
+            "bag_file",
+            "travel_time_s",
+            "path_length_m",
+            "smoothness_l1_int_jerk_dt_m_per_s2",
+            "J_smooth_rms_jerk_m_per_s3",
+            "S_eff_rms_snap_m_per_s4",
+            "total_cmds",
+            "vel_violations", "vel_violate_pct",
+            "acc_violations", "acc_violate_pct",
+            "jerk_violations", "jerk_violate_pct",
+        ])
+        for row in per_bag_rows:
+            w.writerow(row)
+
+    # Overall CSV (single-row summary, plus constraints for provenance)
+    with open(overall_csv, "wb") as cf:
+        w = csv.writer(cf)
+        w.writerow([
+            "processed_bags",
+            "tol_m",
+            "v_max_axis", "a_max_axis", "j_max_axis",
+            "travel_time_mean_s", "travel_time_std_s", "travel_time_min_s", "travel_time_max_s",
+            "path_length_mean_m", "path_length_std_m", "path_length_min_m", "path_length_max_m",
+            "smoothness_l1_mean", "smoothness_l1_std", "smoothness_l1_min", "smoothness_l1_max",
+            "J_smooth_mean", "J_smooth_std", "J_smooth_min", "J_smooth_max",
+            "S_eff_mean", "S_eff_std", "S_eff_min", "S_eff_max",
+            "total_cmds",
+            "vel_violations_total", "vel_violations_pct_overall",
+            "acc_violations_total", "acc_violations_pct_overall",
+            "jerk_violations_total", "jerk_violations_pct_overall",
+        ])
+        w.writerow([
+            int(processed_count),
+            float(tol),
+            float(v_constraint), float(a_constraint), float(j_constraint),
+            tt_mu, tt_sd, tt_min, tt_max,
+            pl_mu, pl_sd, pl_min, pl_max,
+            sm_mu, sm_sd, sm_min, sm_max,
+            js_mu, js_sd, js_min, js_max,
+            se_mu, se_sd, se_min, se_max,
+            int(total_cmds_all),
+            int(total_vel_viol), float(v_all_pct),
+            int(total_acc_viol), float(a_all_pct),
+            int(total_jerk_viol), float(j_all_pct),
+        ])
+
+    print("Saved per-bag CSV to: {0}".format(per_bag_csv))
+    print("Saved overall CSV to: {0}".format(overall_csv))
 
 
 if __name__ == "__main__":

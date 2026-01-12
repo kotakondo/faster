@@ -192,6 +192,6 @@ You can safely ignore these terminal errors:
 open 4 panes in tmux and run the following commands:
 
 sim pane 1. roscore
-sim pane 2. python3 src/faster/docker/benchmarking.py 10 60 105.0,0.0,3.0 0.5     (10 simulation, 60 seconds to shut down, goal 105.0,0.0,3.0, goal radius 0.5)
+sim pane 2. catkin config -DCMAKE_BUILD_TYPE=Release && catkin build && . devel/setup.bash && python src/faster/docker/benchmarking.py 10 60 105.0,0.0,3.0 0.5    (10 simulation, 60 seconds to shut down, goal 105.0,0.0,3.0, goal radius 0.5)
 data analysis pane 3. go to /home/kota/data and copy easy_forest_obstacle_parameters.csv from the host machine (can be obtained by dynus's generate_random_forest.py) and to check collisions with obstacles, run python ../ws/src/faster/docker/collision_checker.py /home/kota/data/easy_forest_obstacle_parameters.csv /home/kota/data 0.1  (obstacle file, output location, and drone radius)
 data analysis pane 4. to analyze data (to get travel time, path length, dynaic constr. violation) run python3 ../ws/src/faster/docker/analyze_bag.py /home/kota/data/ 0.5 

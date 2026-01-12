@@ -13,4 +13,5 @@ run:
 			--env="DISPLAY" \
 			--env="QT_X11_NO_MITSHM=1" \
 			--volume=${PWD}/gurobi.lic:/opt/gurobi/gurobi.lic:ro \
+			-v /media/kkondo/kota_elements/faster:/home/kota/data \
 			--rm faster

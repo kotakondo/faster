@@ -4,6 +4,7 @@ LABEL Maintainer="Kota Kondo <kkondo@mit.edu>" \
       Description="Ubuntu 18.04, ROS Melodic for FASTER"
 
 ENV ROS_DISTRO=melodic
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN sudo rm -rf /var/lib/apt/lists/*
 RUN apt-get update && \
@@ -12,7 +13,7 @@ RUN apt-get update && \
       apt-get autoremove -y && \
       apt-get clean
 
-RUN sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
      ros-${ROS_DISTRO}-mavros-msgs \
      ros-${ROS_DISTRO}-tf2-sensor-msgs \
      ros-${ROS_DISTRO}-control-toolbox  \
@@ -38,9 +39,16 @@ RUN sudo apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
 RUN sudo apt install python3-pycryptodome -y
 RUN python -m pip install pyquaternion pycryptodome 
 
-# for data analysis i need python3
-RUN pip install python3 
-RUN pip3 install numpy rospkg matplotlib scipy pandas netifaces
+RUN pip install numpy rospkg matplotlib scipy pandas netifaces
+
+# Livox-SDK2
+WORKDIR /home/kota/
+RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git
+WORKDIR /home/kota/Livox-SDK2
+RUN mkdir build
+WORKDIR /home/kota/Livox-SDK2/build
+RUN cmake .. && make -j
+RUN sudo make install
 
 # Install Faster
 RUN mkdir -p /home/kota/ws/src
@@ -65,6 +73,10 @@ RUN apt-get update && apt-get install make && \
       make && \
       cp libgurobi_c++.a ../../lib/
 
+# Update acl-gazebo
+WORKDIR /home/kota/ws/src/acl-gazebo
+RUN git checkout benchmark_for_dynus
+
 # Build Faster
 WORKDIR /home/kota/ws
 RUN catkin config -DCMAKE_BUILD_TYPE=Release
@@ -72,6 +84,22 @@ RUN export GUROBI_HOME="/opt/gurobi952/linux64" && \
       export PATH="${PATH}:${GUROBI_HOME}/bin" && \
       export LD_LIBRARY_PATH="${GUROBI_HOME}/lib" && \
       . /opt/ros/melodic/setup.sh && catkin build
+
+# livox_ros_driver2
+RUN mkdir -p /home/kota/livox_ros_ws/src
+WORKDIR /home/kota/livox_ros_ws/src
+RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git
+WORKDIR /home/kota/livox_ros_ws/src/livox_ros_driver2
+RUN ./build.sh ROS1
+
+# Mid360_simulation_plugin
+RUN mkdir -p /home/kota/mid360_ws/src
+WORKDIR /home/kota/mid360_ws/src
+RUN git clone https://github.com/kotakondo/Mid360_simulation_plugin.git
+WORKDIR /home/kota/mid360_ws
+RUN bash -c "source /opt/ros/melodic/setup.bash && source /home/kota/ws/devel/setup.bash && catkin_make -DBUILD_TYPE=Release"
+
+WORKDIR /home/kota/ws
 
 RUN echo "export GUROBI_HOME=\"/opt/gurobi952/linux64\"" >> ~/.bashrc
 RUN echo "export PATH=\"\${PATH}:\${GUROBI_HOME}/bin\"" >> ~/.bashrc

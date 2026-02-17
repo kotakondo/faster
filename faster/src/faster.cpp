@@ -113,7 +113,7 @@ void Faster::recordData()
   std::cout << "writing computation times to csv file" << std::endl;
   // Open (or create) a CSV file for writing (append mode)
   std::ofstream csvFile;
-  csvFile.open("/home/kota/data/computation_times_num_" + std::to_string(simulation_number_) + ".csv", std::ios::app);
+  csvFile.open(par_.data_dir + "/computation_times_num_" + std::to_string(simulation_number_) + ".csv", std::ios::app);
   if (!csvFile.is_open())
   {
     std::cerr << "Error: Could not open CSV file for writing." << std::endl;
@@ -154,18 +154,14 @@ void Faster::updateMap(pcl::PointCloud<pcl::PointXYZ>::Ptr pclptr_map, pcl::Poin
   if (pclptr_map_->width != 0 && pclptr_map_->height != 0) // Point Cloud is not empty
   {
     kdtree_map_.setInputCloud(pclptr_map_);
-    kdtree_map_initialized_ = 1;
+    map_has_data_ = true;
     jps_manager_.vec_o_ = pclptr_to_vec(pclptr_map_);
   }
-  else
-  {
-    std::cout << "Occupancy Grid received is empty, maybe map is too small?" << std::endl;
-  }
+  kdtree_map_initialized_ = 1;
 
   if (pclptr_unk_->points.size() == 0)
   {
     std::cout << "Unkown cloud has 0 points" << std::endl;
-    return;
   }
   else
   {
@@ -903,7 +899,7 @@ Eigen::Vector3d Faster::getFirstCollisionJPS(vec_Vecf<3> &path, bool *thereIsInt
 
     if (map == MAP)
     {
-      number_of_neigh = kdtree_map_.nearestKSearch(pcl_search_point, n, id_map, dist2_map);
+      number_of_neigh = map_has_data_ ? kdtree_map_.nearestKSearch(pcl_search_point, n, id_map, dist2_map) : 0;
     }
     else // map == UNKNOWN_MAP
     {

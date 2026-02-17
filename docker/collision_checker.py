@@ -8,7 +8,12 @@ import math
 from geometry_msgs.msg import PoseStamped
 
 def load_forest_parameters(csv_path):
-    """Load forest parameters from CSV and return a list of cylinder dictionaries."""
+    """Load forest parameters from CSV and return a list of cylinder dictionaries.
+
+    Supports both formats:
+      - Simple:  id, x, y, z, radius, height
+      - Full:    id, shape, x, y, z, radius, width, depth, height, yaw
+    """
     cylinders = []
     with open(csv_path, "r") as f:
         reader = csv.DictReader(f)
@@ -24,22 +29,23 @@ def load_forest_parameters(csv_path):
             cylinders.append(cyl)
     return cylinders
 
-def check_collision(agent_pos, cylinder, drone_radius=0.1):
+def check_collision(agent_pos, cylinder, drone_radius=0):
     """
     Check if agent_pos (tuple of x,y,z) collides with the given cylinder.
     Cylinder is defined by (x, y, z, radius, height), where z is the cylinder's base (here spawned with z = height/2, so it spans z=0 to z=height).
-    If a collision occurs, return a tuple (True, cylinder_id, penetration_distance), 
-    where penetration_distance = (drone_radius + cylinder_radius) - horizontal_distance.
+    Uses point-mass model (drone_radius=0): collision occurs when the point is
+    inside the cylinder (horizontal_dist <= cylinder radius).
+    If a collision occurs, return a tuple (True, cylinder_id, penetration_distance),
+    where penetration_distance = cylinder_radius - horizontal_distance.
     Otherwise, return (False, None, None).
     """
     dx = agent_pos[0] - cylinder["x"]
     dy = agent_pos[1] - cylinder["y"]
     horizontal_dist = math.sqrt(dx*dx + dy*dy)
-    allowed_dist = cylinder["radius"] + drone_radius
-    if horizontal_dist <= allowed_dist:
+    if horizontal_dist <= cylinder["radius"]:
         # Check vertical collision: agent's z must be within [0, cylinder["height"]]
         if 0 <= agent_pos[2] <= cylinder["height"]:
-            penetration = allowed_dist - horizontal_dist
+            penetration = cylinder["radius"] - horizontal_dist
             return (True, cylinder["id"], penetration)
     return (False, None, None)
 
@@ -70,7 +76,7 @@ def process_bag(bag_path, cylinders, drone_radius, topic="/SQ01s/goal"):
 def main():
     if len(sys.argv) < 4:
         print("Usage: {} <forest_csv_path> <bag_folder> <drone_radius>".format(sys.argv[0]))
-        print("Example: python collision_checker.py /home/kota/data/easy_forest_obstacle_parameters.csv /home/kota/data 0.1")
+        print("Example: python collision_checker.py /home/kota/data/easy_forest_obstacle_parameters.csv /home/kota/data 0")
         sys.exit(1)
     forest_csv = sys.argv[1]
     bag_folder = sys.argv[2]

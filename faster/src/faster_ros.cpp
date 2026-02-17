@@ -59,6 +59,7 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
   safeGetParam(nh_, "is_ground_robot", par_.is_ground_robot);
 
   safeGetParam(nh_, "simulation_number", par_.simulation_number);
+  nh_.param<std::string>("data_dir", par_.data_dir, "/home/kota/data");
 
   // And now obtain the parameters from the mapper
   std::vector<double> world_dimensions;

@@ -117,13 +117,16 @@ def compute_Jsmooth_and_Seff(times, jerk_norms, jerk_x=None, jerk_y=None, jerk_z
     return {"J_smooth": J_smooth, "S_eff": S_eff, "snaps": snaps}
 
 
-def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_constraint=30.0):
+def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_constraint=30.0,
+                start_position=(0.0, 0.0, 2.0)):
     bag = rosbag.Bag(bag_file)
 
     goal_time = None
     goal_position = None
     start_time = None
     end_time = None
+    incomplete_bag = False
+    gap_distance = 0.0
 
     pos_cmd_times = []
     positions = []
@@ -133,17 +136,16 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
     jx_list, jy_list, jz_list = [], [], []
     jerk_norms = []
 
-    initial_pos_ref = None
-
     vel_violations = 0
     acc_violations = 0
     jerk_violations = 0
     total_cmds = 0
 
-    perct = 0.01
-    v_thresh = v_constraint * (1.0 + perct)
-    a_thresh = a_constraint * (1.0 + perct)
-    j_thresh = j_constraint * (1.0 + perct)
+    v_thresh = v_constraint + 1e-3
+    a_thresh = a_constraint + 1e-3
+    j_thresh = j_constraint + 1e-3
+
+    speed_thresh = 0.1  # m/s — end condition requires speed below this
 
     print("Processing bag: {0}".format(bag_file))
 
@@ -163,15 +165,15 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
 
         pos = (msg.p.x, msg.p.y, msg.p.z)
 
-        start_tol = 0.05
+        # Start time = timestamp of the first /SQ01s/goal message (first command)
         if start_time is None:
-            if initial_pos_ref is None:
-                initial_pos_ref = pos
-                continue
-            if compute_distance(pos, initial_pos_ref) <= start_tol:
-                continue
             start_time = pos_time
-            print("  Start of travel detected at time {0:.3f}".format(start_time))
+            gap_distance = compute_distance(pos, start_position)
+            if gap_distance > 0.5:
+                incomplete_bag = True
+                print("  WARNING: incomplete bag detected. First position {0} is {1:.3f}m "
+                      "from expected start {2}".format(pos, gap_distance, start_position))
+            print("  Start of travel detected at time {0:.3f} (first command)".format(start_time))
 
         total_cmds += 1
         pos_cmd_times.append(pos_time)
@@ -195,9 +197,11 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
         if (abs(jx) > j_thresh) or (abs(jy) > j_thresh) or (abs(jz) > j_thresh):
             jerk_violations += 1
 
-        if compute_distance(pos, goal_position) <= tol:
+        # End condition: within tol of goal AND speed < speed_thresh
+        speed = float(np.sqrt(vx*vx + vy*vy + vz*vz))
+        if compute_distance(pos, goal_position) <= tol and speed < speed_thresh:
             end_time = pos_time
-            print("  Goal reached at time {0:.3f}".format(end_time))
+            print("  Goal reached at time {0:.3f} (dist <= {1}m, speed = {2:.4f} m/s)".format(end_time, tol, speed))
             break
 
     bag.close()
@@ -218,6 +222,22 @@ def process_bag(bag_file, tol=0.5, v_constraint=10.0, a_constraint=20.0, j_const
     if len(positions) >= 2:
         for i in range(len(positions) - 1):
             path_length += compute_distance(positions[i], positions[i + 1])
+
+    # Compensate for late-starting bag: prepend gap distance and estimate
+    # missing time from the average speed of the first few recorded samples.
+    if incomplete_bag and gap_distance > 0.0:
+        path_length += gap_distance
+        if len(positions) >= 2:
+            first_seg_dist = compute_distance(positions[0], positions[1])
+            first_seg_dt = pos_cmd_times[1] - pos_cmd_times[0]
+            if first_seg_dt > 0:
+                avg_speed = first_seg_dist / first_seg_dt
+                if avg_speed > 0:
+                    missing_time = gap_distance / avg_speed
+                    travel_time += missing_time
+                    print("  Compensated for incomplete bag: gap={0:.3f}m, "
+                          "estimated missing time={1:.3f}s".format(
+                              gap_distance, missing_time))
 
     t_arr = np.asarray(pos_cmd_times, dtype=float)
     j_arr = np.asarray(jerk_norms, dtype=float)
@@ -390,7 +410,7 @@ def main():
 
     stats_lines = []
     stats_lines.append("Bag File Statistics:\n\n")
-    stats_lines.append("Note: constraint violations are PER-AXIS with 1% slack.\n\n")
+    stats_lines.append("Note: constraint violations are PER-AXIS with 1e-3 absolute tolerance.\n\n")
 
     for bag_file in bag_files:
         result = process_bag(bag_file, tol, v_constraint, a_constraint, j_constraint)
@@ -434,11 +454,11 @@ def main():
         stats_lines.append("  Smoothness (∫||jerk|| dt): {0:.6f} m/s^2\n".format(result["smoothness_l1"]))
         stats_lines.append("  J_smooth (RMS jerk): {0:.6f} m/s^3\n".format(result["J_smooth"]))
         stats_lines.append("  S_eff (RMS snap): {0:.6f} m/s^4\n".format(result["S_eff"]))
-        stats_lines.append("  Velocity violations (|v_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n".format(
+        stats_lines.append("  Velocity violations (|v_axis|>{0}+1e-3): {1} ({2:.2f}%)\n".format(
             v_constraint, result["vel_violations"], result["vel_violate_pct"]))
-        stats_lines.append("  Acceleration violations (|a_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n".format(
+        stats_lines.append("  Acceleration violations (|a_axis|>{0}+1e-3): {1} ({2:.2f}%)\n".format(
             a_constraint, result["acc_violations"], result["acc_violate_pct"]))
-        stats_lines.append("  Jerk violations (|j_axis|>{0}, +1% slack): {1} ({2:.2f}%)\n\n".format(
+        stats_lines.append("  Jerk violations (|j_axis|>{0}+1e-3): {1} ({2:.2f}%)\n\n".format(
             j_constraint, result["jerk_violations"], result["jerk_violate_pct"]))
 
         save_plots(bag_file, result, v_constraint, a_constraint, j_constraint, show_snap=True)

@@ -1,0 +1,4 @@
+data/*.bag
+data/*.pdf
+.git
+docker/gurobi.lic

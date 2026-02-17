@@ -5,6 +5,7 @@
 	<arg name="quad" default="SQ01s"/>
 	<arg name="goal_topic" default="goal"/>
 	<arg name="simulation_number" default="1"/>
+	<arg name="data_dir" default="/home/kota/data"/>
 
 	<node ns="$(arg quad)" name="faster" pkg="faster" type="faster_node" output="screen" clear_params="true"> 
     <rosparam file="$(find faster)/param/faster.yaml" command="load"/>
@@ -29,6 +30,7 @@
 
 		<!-- Parameters -->
 		<param name="simulation_number" value="$(arg simulation_number)"/>
+		<param name="data_dir" value="$(arg data_dir)"/>
 
 	</node>
 

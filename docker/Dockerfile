@@ -50,18 +50,16 @@ WORKDIR /home/kota/Livox-SDK2/build
 RUN cmake .. && make -j
 RUN sudo make install
 
-# Install Faster
-RUN mkdir -p /home/kota/ws/src
+# Fetch FASTER dependencies (cached unless rosinstall files change)
+RUN mkdir -p /home/kota/ws/src/faster/faster/install
 WORKDIR /home/kota/ws/src
-ARG DUMMY=unknown
-RUN DUMMY=${DUMMY} git clone https://github.com/kotakondo/faster.git
+COPY faster/faster/install/faster.rosinstall /home/kota/ws/src/faster/faster/install/
 RUN wstool init
 RUN wstool merge ./faster/faster/install/faster.rosinstall
-RUN wstool merge ./faster/faster/install/faster_ground_robot.rosinstall
-RUN wstool update -j8
-WORKDIR /home/kota/ws
+RUN wstool update -j8 || wstool update -j8 || wstool update -j8
 
 ## Install gurobi
+WORKDIR /home/kota/ws
 RUN wget https://packages.gurobi.com/9.5/gurobi9.5.2_linux64.tar.gz -P . && \
       tar -xzf gurobi9.5.2_linux64.tar.gz && \
       rm gurobi9.5.2_linux64.tar.gz && \
@@ -76,6 +74,14 @@ RUN apt-get update && apt-get install make && \
 # Update acl-gazebo
 WORKDIR /home/kota/ws/src/acl-gazebo
 RUN git checkout benchmark_for_dynus
+
+# Update acl-mapping from local machine (no need to commit/push to test)
+ARG ACL_MAPPING_CACHEBUST=1
+COPY acl-mapping /home/kota/ws/src/acl-mapping
+
+# Copy FASTER source code from local machine (deps above are cached)
+WORKDIR /home/kota/ws/src
+COPY faster /home/kota/ws/src/faster
 
 # Build Faster
 WORKDIR /home/kota/ws

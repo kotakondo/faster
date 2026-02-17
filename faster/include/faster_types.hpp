@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 struct polytope
 {
   Eigen::MatrixXd A;
@@ -69,6 +71,7 @@ struct parameters
   bool force_goal_height;
 
   int simulation_number;
+  std::string data_dir;
 
   /*  double kw;
     double kyaw;

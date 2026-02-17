@@ -45,11 +45,12 @@ SolverGurobi::SolverGurobi()
   v_max_ = 5;
   a_max_ = 3;
   j_max_ = 5;
-  // N_ = 10;  // Segments: 0,1,...,N_-1
+
+  // Suppress Gurobi license and log output
+  env->set(GRB_IntParam_OutputFlag, 0);
+  env->set(GRB_IntParam_LogToConsole, 0);
 
   // Model
-  /*  env = new GRBEnv();
-    m = GRBModel(*env);*/
   m.set(GRB_StringAttr_ModelName, "planning");
 
   cb_ = mycallback();
@@ -435,7 +436,6 @@ bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
     {
       trials_ = trials_ + 1;
       findDT(i);
-      // std::cout << "Going to try with dt_= " << dt_ << ", should_terminate_=" << cb_.should_terminate_ << std::endl;
       setPolytopesConstraints();
       setConstraintsX0();
       setConstraintsXf();
@@ -454,18 +454,9 @@ bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
     {
       std::cout << "Exception during optimization" << std::endl;
     }
-    /*    if (solved == true)
-        {
-          solved = isWmaxSatisfied();
-        }*/
-    if (solved == true)  // solved and Wmax is satisfied
+    if (solved == true)
     {
       factor_that_worked_ = i;
-      // std::cout << "Factor= " << i << "(dt_= " << dt_ << ")---> worked" << std::endl;
-    }
-    else
-    {
-      // std::cout << "Factor= " << i << "(dt_= " << dt_ << ")---> didn't worked" << std::endl;
     }
   }
 

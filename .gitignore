@@ -1,2 +1,5 @@
 .rosinstall
 .rosinstall.bak
+data/
+docker/gurobi.lic
+__pycache__/

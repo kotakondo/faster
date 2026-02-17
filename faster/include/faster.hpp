@@ -152,6 +152,7 @@ private:
 
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_map_;       // kdtree of the point cloud of the occuppancy grid
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_unk_;       // kdtree of the point cloud of the unknown grid
+  bool map_has_data_ = false;                         // true when kdtree_map_ has valid data
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_frontier_;  // kdtree of the frontier
 
   bool kdtree_map_initialized_ = 0;

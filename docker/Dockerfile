@@ -13,7 +13,7 @@ RUN apt-get update && \
       apt-get autoremove -y && \
       apt-get clean
 
-RUN sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ros-${ROS_DISTRO}-gazebo-ros-pkgs \
+RUN sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::http::Pipeline-Depth=0 -o Acquire::Retries=5 install -y --fix-missing ros-${ROS_DISTRO}-gazebo-ros-pkgs \
      ros-${ROS_DISTRO}-mavros-msgs \
      ros-${ROS_DISTRO}-tf2-sensor-msgs \
      ros-${ROS_DISTRO}-control-toolbox  \
@@ -36,7 +36,7 @@ RUN sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ros-${ROS_DISTRO}-gaz
      python3-catkin-tools \
      rqt*
 
-RUN sudo apt install python3-pycryptodome -y
+RUN sudo apt-get -o Acquire::http::Pipeline-Depth=0 -o Acquire::Retries=5 install -y python3-pycryptodome
 RUN python -m pip install pyquaternion pycryptodome 
 
 RUN pip install numpy rospkg matplotlib scipy pandas netifaces
@@ -66,8 +66,8 @@ RUN wget https://packages.gurobi.com/9.5/gurobi9.5.2_linux64.tar.gz -P . && \
       mv gurobi952/ /opt && \
       . /opt/ros/melodic/setup.sh
 WORKDIR /opt/gurobi952/linux64/src/build
-RUN apt-get update && apt-get install make && \
-      apt install build-essential -y --no-install-recommends && \
+RUN apt-get update && apt-get -o Acquire::http::Pipeline-Depth=0 -o Acquire::Retries=5 install -y make && \
+      apt-get -o Acquire::http::Pipeline-Depth=0 -o Acquire::Retries=5 install build-essential -y --no-install-recommends && \
       make && \
       cp libgurobi_c++.a ../../lib/
 

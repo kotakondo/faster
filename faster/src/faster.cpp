@@ -49,11 +49,24 @@ Faster::Faster(parameters par) : par_(par)
 
   double max_values[3] = {par_.v_max, par_.a_max, par_.j_max};
 
+  // Dynamic-limit constraint mode: "safe_faster" enforces v/a/j limits on all control points of each
+  // segment; "original_faster" (default) enforces them only at the start (tau=0) of each segment.
+  bool use_safe_constraints = (par_.faster_mode == "safe_faster");
+  if (par_.faster_mode != "safe_faster" && par_.faster_mode != "original_faster")
+  {
+    std::cout << "[FASTER] WARNING: unknown faster_mode='" << par_.faster_mode
+              << "', defaulting to 'original_faster'" << std::endl;
+  }
+  std::cout << "[FASTER] Dynamic-limit constraint mode: "
+            << (use_safe_constraints ? "safe_faster (all control points)" : "original_faster (segment start only)")
+            << std::endl;
+
   // Setup of sg_whole_
   sg_whole_.setN(par_.N_whole);
   sg_whole_.createVars();
   sg_whole_.setDC(par_.dc);
   sg_whole_.setBounds(max_values);
+  sg_whole_.setUseSafeConstraints(use_safe_constraints);
   sg_whole_.setForceFinalConstraint(true);
   sg_whole_.setFactorInitialAndFinalAndIncrement(1, 10, par_.increment_whole);
   sg_whole_.setVerbose(par_.gurobi_verbose);
@@ -65,6 +78,7 @@ Faster::Faster(parameters par) : par_(par)
   sg_safe_.createVars();
   sg_safe_.setDC(par_.dc);
   sg_safe_.setBounds(max_values);
+  sg_safe_.setUseSafeConstraints(use_safe_constraints);
   sg_safe_.setForceFinalConstraint(false);
   sg_safe_.setFactorInitialAndFinalAndIncrement(1, 10, par_.increment_safe);
   sg_safe_.setVerbose(par_.gurobi_verbose);

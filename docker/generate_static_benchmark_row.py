@@ -192,7 +192,7 @@ ENV_DISPLAY_NAMES = {
 
 
 def format_faster_row(summary, comp_times, goal_status, collision_info,
-                      per_bag_rows=None, env_name=None):
+                      per_bag_rows=None, env_name=None, row_label="FASTER (CP)"):
     """Format the FASTER LaTeX table row.
 
     New table layout (12 columns):
@@ -246,10 +246,11 @@ def format_faster_row(summary, comp_times, goal_status, collision_info,
     rho_jerk = summary["jerk_violations_pct_overall"]
 
     row = (
-        "       & FASTER & Hard & $L_\\infty$ & {{{succ:.1f}}} & {t_opt} & {t_replan}"
+        "       & {algo} & Hard & $L_\\infty$ & {{{succ:.1f}}} & {t_opt} & {t_replan}"
         " & {{{trav:.1f}}} & {{{path:.1f}}} & {{{jerk:.1f}}}"
         " & {{{vel:.1f}}} & {{{acc:.1f}}} & {{{jrk:.1f}}} \\\\"
     ).format(
+        algo=row_label,
         succ=success_rate,
         t_opt=t_opt_str,
         t_replan=t_replan_str,
@@ -271,11 +272,11 @@ ENV_TO_INDEX = {
 }
 
 
-def update_latex_table(latex_path, new_faster_row, env_name=None):
-    """Read the LaTeX table, replace the Nth FASTER row.
+def update_latex_table(latex_path, new_faster_row, env_name=None, row_label="FASTER (CP)"):
+    """Read the LaTeX table, replace the Nth row whose algorithm == row_label.
 
-    The table has three FASTER rows (Easy, Medium, Hard) in order.
-    We simply find and replace the Nth occurrence based on env_name.
+    The table has three such rows (Easy, Medium, Hard) in order.
+    We find and replace the Nth occurrence based on env_name.
     """
     if not os.path.exists(latex_path):
         print("ERROR: LaTeX table not found: {}".format(latex_path))
@@ -287,6 +288,10 @@ def update_latex_table(latex_path, new_faster_row, env_name=None):
     target_idx = ENV_TO_INDEX.get(env_name, 0) if env_name else 0
     env_display = ENV_DISPLAY_NAMES.get(env_name, env_name) if env_name else None
 
+    # Match the row whose Algorithm cell equals row_label exactly. The
+    # "& <label> &" delimiters avoid matching "FASTER" inside "FASTER (CP)".
+    match_token = "& {} &".format(row_label)
+
     new_lines = []
     replaced = False
     faster_count = 0
@@ -295,9 +300,8 @@ def update_latex_table(latex_path, new_faster_row, env_name=None):
         stripped = line.strip()
 
         if (not replaced
-                and "FASTER" in stripped
-                and "\\\\" in stripped
-                and "&" in stripped):
+                and match_token in stripped
+                and "\\\\" in stripped):
             if faster_count == target_idx:
                 new_lines.append(new_faster_row + "\n")
                 replaced = True
@@ -308,7 +312,7 @@ def update_latex_table(latex_path, new_faster_row, env_name=None):
             new_lines.append(line)
 
     if not replaced:
-        label = "FASTER in {} section".format(env_display) if env_display else "FASTER"
+        label = "{} in {} section".format(row_label, env_display) if env_display else row_label
         print("WARNING: Could not find '{}' row in {}. No changes made.".format(
             label, latex_path))
         return False
@@ -334,7 +338,7 @@ def main():
     parser.add_argument(
         "--latex-table",
         type=str,
-        default="/home/kkondo/paper_writing/DYNUS_v3/tables/static_benchmark.tex",
+        default="/home/kkondo/paper_writing/SANDO_paper/tables/static_benchmark.tex",
         help="Path to static_benchmark.tex",
     )
     parser.add_argument(
@@ -342,7 +346,14 @@ def main():
         type=str,
         default=None,
         help="Environment name (e.g., easy_forest, medium_forest, hard_forest). "
-             "If provided, updates the per-environment FASTER row.",
+             "If provided, updates the per-environment row.",
+    )
+    parser.add_argument(
+        "--row-label",
+        type=str,
+        default="FASTER (CP)",
+        help="Algorithm label of the table row to update, e.g. 'FASTER (CP)' "
+             "(safe_faster data) or 'FASTER' (original_faster data).",
     )
 
     args = parser.parse_args()
@@ -388,12 +399,14 @@ def main():
     print("  rho_jerk:      {:.1f}%".format(summary["jerk_violations_pct_overall"]))
 
     new_row = format_faster_row(summary, comp_times, goal_status, collision_info,
-                               per_bag_rows=per_bag_rows, env_name=args.env_name)
+                               per_bag_rows=per_bag_rows, env_name=args.env_name,
+                               row_label=args.row_label)
     print("\n--- Generated LaTeX Row ---")
     print(new_row)
 
     print("\nUpdating: {}".format(args.latex_table))
-    success = update_latex_table(args.latex_table, new_row, env_name=args.env_name)
+    success = update_latex_table(args.latex_table, new_row, env_name=args.env_name,
+                                 row_label=args.row_label)
 
     if success:
         env_label = args.env_name or "FASTER"

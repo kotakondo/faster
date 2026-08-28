@@ -24,6 +24,12 @@ v_max: 5.0   #[m/s]  1.4
 a_max: 20.0   #[m/s2] 1.4
 j_max: 100.0  #[m/s3] 35
 
+# How the v_max/a_max/j_max limits are enforced by the Gurobi solver:
+#   "original_faster" -> limits checked only at the start (tau=0) of each polynomial segment (original FASTER behavior)
+#   "safe_faster"     -> limits checked on ALL Bezier control points of each segment, so the entire continuous
+#                        segment is guaranteed within limits (more conservative, a few more constraints per segment)
+faster_mode: "safe_faster"
+
 #Factors for time allocation
 gamma_whole: 10       #[-]
 gammap_whole: 10  #[-]

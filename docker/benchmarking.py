@@ -106,9 +106,16 @@ def launch_simulation(sim_num, env_source, goal_coords, world_path=None, start_p
     bag_file = os.path.join(DATA_DIR, "faster_num_{0}.bag".format(sim_num))
     rosbag_cmd = (
         "{0} && rosbag record "
-        "/SQ01s/faster/term_goal /SQ01s/goal /tf /SQ01s/faster/point_G_term "
+        "/SQ01s/faster/term_goal /SQ01s/goal /tf /tf_static "
+        "/SQ01s/faster/point_G_term "
         "/SQ01s/cvx/point_G /SQ01s/setpoint /SQ01s/faster/traj_whole "
+        "/SQ01s/faster/traj_safe "
+        "/SQ01s/faster/traj_whole_colored /SQ01s/faster/traj_safe_colored "
+        "/SQ01s/cvx/actual_traj "
+        "/SQ01s/cvx/path_jps1 "
+        "/SQ01s/global_mapper_ros/occupancy_grid "
         "/SQ01s/global_mapper_ros/unknown_grid "
+        "/SQ01s/faster/poly_whole /SQ01s/faster/poly_safe "
         "-O {1}"
     ).format(env_source, bag_file)
 

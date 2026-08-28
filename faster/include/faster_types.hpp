@@ -60,6 +60,11 @@ struct parameters
 
   bool use_faster;
 
+  // Gurobi dynamic-limit (v/a/j) constraint mode:
+  //   "original_faster" -> limits only at the start (tau=0) of each segment
+  //   "safe_faster"     -> limits on all Bezier control points of each segment
+  std::string faster_mode;
+
   double wdx;
   double wdy;
   double wdz;

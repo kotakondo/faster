@@ -3,3 +3,4 @@
 data/
 docker/gurobi.lic
 __pycache__/
+data_video/**/*.bag

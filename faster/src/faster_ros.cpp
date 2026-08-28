@@ -56,6 +56,8 @@ FasterRos::FasterRos(ros::NodeHandle nh) : nh_(nh)
 
   safeGetParam(nh_, "use_faster", par_.use_faster);
 
+  nh_.param<std::string>("faster_mode", par_.faster_mode, "original_faster");
+
   safeGetParam(nh_, "is_ground_robot", par_.is_ground_robot);
 
   safeGetParam(nh_, "simulation_number", par_.simulation_number);

@@ -90,6 +90,8 @@ public:
   bool isWmaxSatisfied();
 
   void setMaxConstraints();
+  void setMaxConstraintsSafe();
+  void setUseSafeConstraints(bool use_safe);
   void createVars();
   void setThreads(int threads);
   void setVerbose(int verbose);
@@ -127,6 +129,11 @@ public:
   std::vector<GRBLinExpr> getCP2(int t);
   std::vector<GRBLinExpr> getCP3(int t);
 
+  // Control points of the velocity/accel/jerk curves of interval t (used by safe_faster mode)
+  std::vector<GRBLinExpr> getVelCP(int t, int ii);    // quadratic Bezier -> 3 control points
+  std::vector<GRBLinExpr> getAccelCP(int t, int ii);  // linear Bezier    -> 2 control points
+  std::vector<GRBLinExpr> getJerkCP(int t, int ii);   // constant         -> 1 control point
+
   std::vector<state> X_temp_;
   double dt_;  // time step found by the solver
   int trials_ = 0;
@@ -158,6 +165,7 @@ protected:
   std::vector<GRBGenConstr> polytopes_cons;    // Used for the whole trajectory
   std::vector<GRBConstr> polytope_cons;        // Used for the rescue path
   std::vector<GRBConstr> dyn_cons;
+  std::vector<GRBConstr> max_cons;  // velocity/accel/jerk limit constraints (rebuilt every solve)
   std::vector<GRBConstr> init_cons;
   std::vector<GRBConstr> final_cons;
 
@@ -177,6 +185,7 @@ protected:
 
   int mode_;
   bool forceFinalConstraint_ = true;
+  bool use_safe_constraints_ = false;  // false: limits at tau=0 only; true: limits on all control points
   double factor_initial_ = 2;
   double factor_final_ = 2;
   double factor_increment_ = 2;

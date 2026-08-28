@@ -375,19 +375,92 @@ void SolverGurobi::resetX()
 
 void SolverGurobi::setMaxConstraints()
 {
-  // Constraint v<=vmax, a<=amax, u<=umax
+  // original_faster: limit v<=vmax, a<=amax, j<=jmax only at the START (tau=0) of each segment.
+  // These expressions do not depend on dt_, but we still rebuild them every solve so the mode can be
+  // toggled uniformly with safe_faster (see the dispatch in genNewTraj()).
+
+  // Remove previous max constraints
+  for (int i = 0; i < max_cons.size(); i++)
+  {
+    m.remove(max_cons[i]);
+  }
+  max_cons.clear();
+
   for (int t = 0; t < N_; t++)
   {
     for (int i = 0; i < 3; i++)
     {
-      m.addConstr(getVel(t, 0, i) <= v_max_, "MaxVel_t" + std::to_string(t) + "_axis_" + std::to_string(i));
-      m.addConstr(getVel(t, 0, i) >= -v_max_, "MinVel_t" + std::to_string(t) + "_axis_" + std::to_string(i));
+      max_cons.push_back(
+          m.addConstr(getVel(t, 0, i) <= v_max_, "MaxVel_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
+      max_cons.push_back(
+          m.addConstr(getVel(t, 0, i) >= -v_max_, "MinVel_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
 
-      m.addConstr(getAccel(t, 0, i) <= a_max_, "MaxAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i));
-      m.addConstr(getAccel(t, 0, i) >= -a_max_, "MinAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i));
+      max_cons.push_back(
+          m.addConstr(getAccel(t, 0, i) <= a_max_, "MaxAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
+      max_cons.push_back(
+          m.addConstr(getAccel(t, 0, i) >= -a_max_, "MinAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
 
-      m.addConstr(getJerk(t, 0, i) <= j_max_, "MaxJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i));
-      m.addConstr(getJerk(t, 0, i) >= -j_max_, "MinJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i));
+      max_cons.push_back(
+          m.addConstr(getJerk(t, 0, i) <= j_max_, "MaxJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
+      max_cons.push_back(
+          m.addConstr(getJerk(t, 0, i) >= -j_max_, "MinJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i)));
+    }
+  }
+}
+
+void SolverGurobi::setMaxConstraintsSafe()
+{
+  // safe_faster: limit v<=vmax, a<=amax, j<=jmax on ALL Bezier control points of each segment.
+  // By the convex-hull property of the Bezier basis, bounding every control point bounds the entire
+  // continuous curve over the segment (conservative). The control points depend on dt_, so this must
+  // be rebuilt every solve, after findDT().
+
+  // Remove previous max constraints
+  for (int i = 0; i < max_cons.size(); i++)
+  {
+    m.remove(max_cons[i]);
+  }
+  max_cons.clear();
+
+  for (int t = 0; t < N_; t++)
+  {
+    for (int i = 0; i < 3; i++)
+    {
+      // Velocity: quadratic Bezier -> 3 control points
+      std::vector<GRBLinExpr> vel_cps = getVelCP(t, i);
+      for (size_t k = 0; k < vel_cps.size(); k++)
+      {
+        max_cons.push_back(m.addConstr(
+            vel_cps[k] <= v_max_,
+            "SafeMaxVel_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+        max_cons.push_back(m.addConstr(
+            vel_cps[k] >= -v_max_,
+            "SafeMinVel_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+      }
+
+      // Acceleration: linear Bezier -> 2 control points
+      std::vector<GRBLinExpr> accel_cps = getAccelCP(t, i);
+      for (size_t k = 0; k < accel_cps.size(); k++)
+      {
+        max_cons.push_back(m.addConstr(
+            accel_cps[k] <= a_max_,
+            "SafeMaxAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+        max_cons.push_back(m.addConstr(
+            accel_cps[k] >= -a_max_,
+            "SafeMinAccel_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+      }
+
+      // Jerk: constant -> 1 control point
+      std::vector<GRBLinExpr> jerk_cps = getJerkCP(t, i);
+      for (size_t k = 0; k < jerk_cps.size(); k++)
+      {
+        max_cons.push_back(m.addConstr(
+            jerk_cps[k] <= j_max_,
+            "SafeMaxJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+        max_cons.push_back(m.addConstr(
+            jerk_cps[k] >= -j_max_,
+            "SafeMinJerk_t" + std::to_string(t) + "_axis_" + std::to_string(i) + "_cp" + std::to_string(k)));
+      }
     }
   }
 }
@@ -398,7 +471,14 @@ void SolverGurobi::setBounds(double max_values[3])
   a_max_ = max_values[1];
   j_max_ = max_values[2];
 
-  setMaxConstraints();
+  // NOTE: the v/a/j limit constraints are (re)built every solve inside genNewTraj(), because the
+  // safe_faster control-point expressions depend on dt_ (set per solve by findDT()). See
+  // setMaxConstraints() / setMaxConstraintsSafe() and the dispatch in genNewTraj().
+}
+
+void SolverGurobi::setUseSafeConstraints(bool use_safe)
+{
+  use_safe_constraints_ = use_safe;
 }
 
 void SolverGurobi::setFactorInitialAndFinalAndIncrement(double factor_initial, double factor_final,
@@ -440,6 +520,12 @@ bool SolverGurobi::genNewTraj(double& gurobi_run_time_ms)
       setConstraintsX0();
       setConstraintsXf();
       setDynamicConstraints();
+      // Dynamic limits (v/a/j). Rebuilt every solve because safe_faster's control-point
+      // expressions depend on dt_ (just set by findDT above).
+      if (use_safe_constraints_)
+        setMaxConstraintsSafe();
+      else
+        setMaxConstraints();
       setObjective();
       resetX();
 
@@ -848,5 +934,40 @@ std::vector<GRBLinExpr> SolverGurobi::getCP2(int t)  // Control Point 2 of inter
 std::vector<GRBLinExpr> SolverGurobi::getCP3(int t)  // Control Point 3 of interval t
 {                                                    // Control Point 3 is end position
   std::vector<GRBLinExpr> cp = { getPos(t, dt_, 0), getPos(t, dt_, 1), getPos(t, dt_, 2) };
+  return cp;
+}
+
+// Velocity control points (quadratic Bezier, 3 CPs) of interval t, axis ii, over tau in [0, dt_].
+// v(tau) = 3A tau^2 + 2B tau + C. Reparameterizing u = tau/dt_ gives power-basis coeffs
+// A_v = 3A dt_^2, B_v = 2B dt_, C_v = C, whose quadratic-Bezier control points are:
+//   V0 = C_v,  V1 = C_v + B_v/2,  V2 = C_v + B_v + A_v  (note V0 = v(0), V2 = v(dt_)).
+std::vector<GRBLinExpr> SolverGurobi::getVelCP(int t, int ii)
+{
+  GRBLinExpr A_v = 3 * getA(t, ii) * dt_ * dt_;
+  GRBLinExpr B_v = 2 * getB(t, ii) * dt_;
+  GRBLinExpr C_v = getC(t, ii);
+
+  GRBLinExpr V0 = C_v;
+  GRBLinExpr V1 = C_v + B_v / 2;
+  GRBLinExpr V2 = C_v + B_v + A_v;
+  std::vector<GRBLinExpr> cp = { V0, V1, V2 };
+  return cp;
+}
+
+// Acceleration control points (linear Bezier, 2 CPs) of interval t, axis ii, over tau in [0, dt_].
+// a(tau) = 6A tau + 2B, so A0 = a(0) = 2B and A1 = a(dt_) = 2B + 6A dt_ (linear -> endpoints suffice).
+std::vector<GRBLinExpr> SolverGurobi::getAccelCP(int t, int ii)
+{
+  GRBLinExpr A0 = 2 * getB(t, ii);
+  GRBLinExpr A1 = A0 + 6 * getA(t, ii) * dt_;
+  std::vector<GRBLinExpr> cp = { A0, A1 };
+  return cp;
+}
+
+// Jerk control point (constant, 1 CP) of interval t, axis ii.  j(tau) = 6A.
+std::vector<GRBLinExpr> SolverGurobi::getJerkCP(int t, int ii)
+{
+  GRBLinExpr J = 6 * getA(t, ii);
+  std::vector<GRBLinExpr> cp = { J };
   return cp;
 }

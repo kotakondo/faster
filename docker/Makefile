@@ -17,7 +17,8 @@ A_MAX        ?= 20.0
 J_MAX        ?= 100.0
 DRONE_RADIUS ?= 0
 
-LATEX_TABLE  ?= /home/kkondo/paper_writing/DYNUS_v3/tables/static_benchmark.tex
+LATEX_TABLE  ?= /home/kkondo/paper_writing/SANDO_paper/tables/static_benchmark.tex
+ROW_LABEL    ?= FASTER (CP)
 REPO_DIR     := $(shell cd .. && pwd)
 WS_SRC_DIR   := $(shell cd ../.. && pwd)
 DATA_DIR     := $(REPO_DIR)/data
@@ -49,8 +50,8 @@ DOCKER_RUN := docker run -it \
 		--rm faster
 
 # ---------- Static Benchmark ----------
-WORLDS_SRC    ?= /home/kkondo/code/dynus_ws/src/dynus/worlds
-OBSTACLE_CSV  ?= /home/kkondo/code/dynus_ws/src/dynus/benchmark_data/static
+WORLDS_SRC    ?= /home/kkondo/code/sando_ws/src/sando/worlds
+OBSTACLE_CSV  ?= /home/kkondo/data
 STATIC_ENVS   := easy_forest medium_forest hard_forest
 STATIC_GOAL   ?= 105.0,0.0,2.0
 STATIC_START  ?= 0.0,0.0,2.0
@@ -75,7 +76,8 @@ DOCKER_RUN_STATIC := docker run -it \
 		--rm faster
 
 .PHONY: build build-clone run run-benchmark analyze-benchmark \
-        run-static-benchmark analyze-static-benchmark help
+        run-static-benchmark analyze-static-benchmark help \
+        run-static-sim-record playback-bag record-video
 
 build:
 	docker build --build-arg ACL_MAPPING_CACHEBUST=`date +%s` -t faster -f $(REPO_DIR)/docker/Dockerfile $(REPO_DIR)/..
@@ -175,7 +177,7 @@ analyze-static-benchmark:
 		python3 generate_static_benchmark_row.py \
 			--data-dir $(DATA_DIR)/$(STATIC_DIR)/$$env \
 			--latex-table $(LATEX_TABLE) \
-			--env-name $$env; \
+			--env-name $$env --row-label "$(ROW_LABEL)"; \
 	done
 	@echo ""
 	@echo "=== LaTeX table updated: $(LATEX_TABLE) ==="
@@ -205,3 +207,111 @@ help:
 	@echo "  WORLDS_SRC=<path>         Path to .world files directory"
 	@echo "  STATIC_GOAL=$(STATIC_GOAL)  Goal position for static benchmarks"
 	@echo "  STATIC_START=$(STATIC_START)  Start position for static benchmarks"
+	@echo ""
+	@echo "Targets (visualization & video recording):"
+	@echo "  run-static-sim-record  Run single hard forest trial with bag recording + RViz"
+	@echo "  playback-bag           Play back a recorded bag in RViz"
+	@echo "  record-video           Play bag + screen-capture RViz to MP4 video"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make run-static-sim-record CASE=hard"
+	@echo "  make playback-bag BAG_FILE=/home/kota/data_video/hard_forest/faster_num_0.bag"
+	@echo "  make record-video BAG_FILE=/home/kota/data_video/hard_forest/faster_num_0.bag VIDEO_OUT=/home/kota/data_video/faster_hard_forest.mp4"
+
+# ── Video / visualization parameters ──────────────────────────────────
+DATA_DIR_VIDEO  ?= $(REPO_DIR)/data_video
+CASE            ?= hard
+BAG_FILE        ?=
+VIDEO_OUT       ?= /home/kota/data_video/faster_hard_forest.mp4
+PLAYBACK_RATE   ?= 1.0
+
+DOCKER_RUN_VIDEO := docker run -it \
+		--gpus all \
+		--env="NVIDIA_DRIVER_CAPABILITIES=all" \
+		--privileged \
+		-e DISPLAY=$(DISPLAY_VAL) \
+		-e XAUTHORITY=/tmp/.docker.xauth \
+		-e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
+		--network=host \
+		--env="QT_X11_NO_MITSHM=1" \
+		-v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+		-v $(HOME)/.Xauthority:/tmp/.docker.xauth:ro \
+		--volume=${PWD}/gurobi.lic:/opt/gurobi/gurobi.lic:ro \
+		-v $(abspath $(DATA_DIR_VIDEO)):/home/kota/data_video \
+		-v $(DATA_DIR):/home/kota/data \
+		-v $(REPO_DIR):/home/kota/ws/src/faster \
+		-v $(WORLDS_SRC):/home/kota/worlds:ro \
+		-v $(OBSTACLE_CSV):/home/kota/obstacle_csv:ro \
+		--rm faster
+
+# ── Visualization & video targets ────────────────────────────────────
+
+## Run a single static forest trial with RViz + rosbag recording
+## Bag is saved to data_video/<case>_forest/faster_num_0.bag with all visualization topics
+run-static-sim-record:
+	@echo "=== FASTER — Record Static Forest Flight ==="
+	@echo "  CASE       = $(CASE)"
+	@echo "  Output dir = $(abspath $(DATA_DIR_VIDEO))/"
+	@echo ""
+	@mkdir -p $(DATA_DIR_VIDEO)
+	@# Patch world file
+	@mkdir -p $(DATA_DIR_VIDEO)
+	@cp $(WORLDS_SRC)/$(CASE)_forest.world $(DATA_DIR_VIDEO)/$(CASE)_forest.world
+	@sed -i \
+		-e "s/sdf version='1.7'/sdf version='1.6'/" \
+		-e '/disable_physics/d' \
+		-e '/<plugin name=.gazebo_ros_state/,/<\/plugin>/d' \
+		$(DATA_DIR_VIDEO)/$(CASE)_forest.world
+	@echo "  Patched $(CASE)_forest.world"
+	$(DOCKER_RUN_VIDEO) bash -c '\
+		ENV_DIR=/home/kota/data_video/$(CASE)_forest && \
+		mkdir -p $$ENV_DIR && \
+		export GUROBI_HOME="/opt/gurobi952/linux64" && \
+		export PATH="$$PATH:$$GUROBI_HOME/bin" && \
+		export LD_LIBRARY_PATH="$$GUROBI_HOME/lib" && \
+		cd /home/kota/ws && \
+		source /opt/ros/melodic/setup.bash && \
+		catkin build 2>&1 | tail -5 && \
+		source /home/kota/ws/devel/setup.bash && \
+		source /home/kota/mid360_ws/devel/setup.bash && \
+		(roscore &) && sleep 3 && \
+		cd /home/kota/ws/src/faster/docker && \
+		python benchmarking.py 1 $(MAX_DURATION) $(STATIC_GOAL) $(GOAL_TOL) \
+			$$ENV_DIR /home/kota/data_video/$(CASE)_forest.world $(STATIC_START)'
+	@echo ""
+	@echo "=== Bag saved to: $(abspath $(DATA_DIR_VIDEO))/$(CASE)_forest/faster_num_0.bag ==="
+
+## Interactive rosbag playback in RViz
+## Usage: make playback-bag BAG_FILE=<path_inside_container>
+playback-bag:
+	@if [ -z "$(BAG_FILE)" ]; then \
+		echo "ERROR: set BAG_FILE, e.g.:"; \
+		echo "  make playback-bag BAG_FILE=/home/kota/data_video/hard_forest/faster_num_0.bag"; \
+		echo ""; \
+		echo "Or to play an existing benchmark bag:"; \
+		echo "  make playback-bag BAG_FILE=/home/kota/data/static_20260216_175928/hard_forest/faster_num_0.bag"; \
+		exit 1; \
+	fi
+	@mkdir -p $(DATA_DIR_VIDEO)
+	$(DOCKER_RUN_VIDEO) bash -c '\
+		source /home/kota/ws/devel/setup.bash && \
+		source /home/kota/mid360_ws/devel/setup.bash && \
+		roscore & sleep 3 && \
+		rviz -d /home/kota/ws/src/faster/docker/playback_rviz.rviz & sleep 5 && \
+		echo "=== Playing $(BAG_FILE) ===" && \
+		echo "Press Ctrl+C to stop" && \
+		rosbag play $(BAG_FILE) --clock -l -r $(PLAYBACK_RATE)'
+
+## Record RViz playback to MP4 video
+## Usage: make record-video BAG_FILE=<path> VIDEO_OUT=<path>
+record-video:
+	@if [ -z "$(BAG_FILE)" ]; then \
+		echo "ERROR: set BAG_FILE"; \
+		exit 1; \
+	fi
+	@mkdir -p $(DATA_DIR_VIDEO)
+	$(DOCKER_RUN_VIDEO) bash -c '\
+		source /home/kota/ws/devel/setup.bash && \
+		source /home/kota/mid360_ws/devel/setup.bash && \
+		apt-get update -qq && apt-get install -y -qq ffmpeg xdotool && \
+		bash /home/kota/ws/src/faster/docker/record_video.sh $(BAG_FILE) $(VIDEO_OUT) $(PLAYBACK_RATE)'
